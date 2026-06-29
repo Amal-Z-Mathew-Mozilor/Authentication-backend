@@ -1,0 +1,25 @@
+{
+  "type": "module",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "crypto": "^1.0.1",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "express": "^5.2.1",
+    "express-validator": "^7.3.2",
+    "init": "^0.1.2",
+    "jsonwebtoken": "^9.0.3",
+    "mail": "^0.2.3",
+    "mailgen": "^2.0.34",
+    "node": "^24.18.0",
+    "nodemailer": "^9.0.1",
+    "pg": "^8.22.0",
+    "redis": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.22.4"
+  }
+}
