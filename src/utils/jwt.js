@@ -20,11 +20,13 @@ export const acessSign=async function(userId)
 export const refreshSign=async function(userId)
 {
     const refreshToken=jwt.sign({id:userId},process.env.REFRESH_SECRETKEY,{expiresIn:process.env.REFRESH_EXPIRY})
+    const { exp }=jwt.decode(refreshToken)
+    const ttlSeconds=exp - Math.floor(Date.now()/1000)
      await redisClient.set(
         `refresh:${refreshToken}`,
         userId,
         {
-            EX:process.env.REFRESH_EXPIRY_SECONDS
+            EX: ttlSeconds
         }
     );
 
