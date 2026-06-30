@@ -27,7 +27,7 @@ export const loginMiddleware = asyncHandler(async (req, res, next) => {
     const errors = validationResult(req);
 
     if (!errors.isEmpty()) {
-        throw new ApiError(422, "Invalid credentials", errors.array());
+        throw new ApiError(422, "Invalid Email format", errors.array());
     }
 
     const attempts = Number(await redisClient.get(key));
