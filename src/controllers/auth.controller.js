@@ -98,8 +98,7 @@ export const login=asyncHandler(async(req,res)=>{
      const[user]=await db.select({id:users.userId,locked:users.isLocked,lockedUntil:users.lockedUntil,limit:users.failedLoginAttempts,verified:users.isVerified,password:users.password}).from(users).where(eq(users.email,email))
      if(!user)
      {
-        await redisClient.incr(key);
-        const attempts = Number(await redisClient.get(key));
+       const attempts= await redisClient.incr(key);
 
        if (attempts >= MAX_IP_ATTEMPTS) {
         const ttl = await redisClient.ttl(key);
