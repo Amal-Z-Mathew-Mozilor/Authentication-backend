@@ -29,6 +29,8 @@ services:
   backend:
     build: .                       # builds backend/Dockerfile
     restart: always
+    # Apply the schema (creates tables on first run; no-op afterwards), then start the server.
+    command: sh -c "npx drizzle-kit push && node src/app.js"
     ports:
       - "8000:8000"
     env_file:
