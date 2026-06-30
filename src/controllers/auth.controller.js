@@ -108,6 +108,7 @@ export const login=asyncHandler(async(req,res)=>{
             throw new ApiError(401,`Account is locked pls try again after${remainingTime}`)
         }
         await db.update(users).set({isLocked:false,lockedUntil:null,failedLoginAttempts:0}).where(eq(users.userId,user.id))
+        user.limit=0
     }
     const result=await verifyPassword(password,user.password)
     if (!result) {
