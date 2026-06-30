@@ -1,0 +1,520 @@
+openapi: 3.0.3
+info:
+  title: Pulse Authentication API
+  version: 1.0.0
+  description: >
+    Authentication backend for Pulse. Covers signup, email verification (+ resend),
+    login with IP/account lockout, logout, password reset (+ resend), change password,
+    token rotation, and the authenticated profile endpoint.
+
+    **Auth model:** on successful login / email verification / token rotation, the server
+    sets two **httpOnly** cookies — `accessToken` and `refreshToken`. Protected endpoints
+    read `accessToken` (and `rotateToken` reads `refreshToken`). All browser calls must send
+    cookies (`credentials: "include"`).
+
+    **Response envelope:** success responses use `{ statuscode, data, message, sucess }`
+    (note: the success flag is spelled `sucess`). Error responses use
+    `{ success: false, message, errors }`.
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+tags:
+  - name: Authentication
+  - name: Verification
+  - name: Password Reset
+  - name: Account
+
+paths:
+  /pulse/users/signup:
+    post:
+      tags: [Authentication]
+      summary: Register a new account
+      description: >
+        Creates a user, stores a single-use email-verification token, and emails a
+        verification link built from the client-supplied `verifyBase` (validated against the
+        server allowlist `ALLOWED_VERIFY_BASES`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, verifyBase]
+              properties:
+                email: { type: string, format: email, example: you@domain.com }
+                password:
+                  type: string
+                  description: >
+                    Min 12 chars, ≥1 uppercase, ≥1 lowercase, ≥1 number, ≥1 special char, no spaces.
+                  example: Abcdefgh1!xx
+                verifyBase:
+                  type: string
+                  description: Frontend base URL for the verify page; must be in ALLOWED_VERIFY_BASES.
+                  example: http://localhost:5173/verify
+      responses:
+        '201':
+          description: Account created; verification email sent.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 201, data: {}, message: "Account created successfully. Please verify your email.", sucess: true }
+        '400':
+          description: Email already exists, or `verifyBase` not allowed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                emailExists: { value: { success: false, message: "email already exist", errors: [] } }
+                badVerifyBase: { value: { success: false, message: "invalid verify url", errors: [] } }
+        '422':
+          description: Validation failed (email/password policy).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
+
+  /pulse/users/verifyEmail/{token}:
+    post:
+      tags: [Verification]
+      summary: Verify an email-verification token
+      description: >
+        Called by the frontend `/verify/:token` page. On success marks the email verified and
+        sets the auth cookies (logs the user in). Returns JSON (no redirect).
+      parameters:
+        - $ref: '#/components/parameters/TokenPath'
+      responses:
+        '200':
+          description: Verified. Sets `accessToken` and `refreshToken` cookies.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetAuthCookies' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 200, data: {}, message: "verified", sucess: true }
+        '401':
+          description: Token expired or already used.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                expired: { value: { success: false, message: "Token expired", errors: [] } }
+                used: { value: { success: false, message: "token already used", errors: [] } }
+        '403':
+          description: Token not found / invalid.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "Invalid Token", errors: [] }
+
+  /pulse/users/resend/{token}:
+    post:
+      tags: [Verification]
+      summary: Resend the email-verification link
+      description: Resolves the (expired) verification token to its user and emails a fresh link.
+      parameters:
+        - $ref: '#/components/parameters/TokenPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verifyBase]
+              properties:
+                verifyBase: { type: string, example: http://localhost:5173/verify }
+      responses:
+        '200':
+          description: A new verification email has been sent.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 200, data: {}, message: "A new verification email has been sent.", sucess: true }
+        '400':
+          description: Invalid token, `verifyBase` not allowed, user not found, or already verified.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                invalidToken: { value: { success: false, message: "invalid token", errors: [] } }
+                alreadyVerified: { value: { success: false, message: "email already verified", errors: [] } }
+
+  /pulse/users/login:
+    post:
+      tags: [Authentication]
+      summary: Log in
+      description: >
+        Validates the email, enforces a per-IP attempt limit (Redis) and a per-account lockout
+        (5 failed attempts → locked ~2 min). On success sets the auth cookies.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Logged in. Sets `accessToken` and `refreshToken` cookies.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetAuthCookies' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 200, data: {}, message: "login sucessfull", sucess: true }
+        '401':
+          description: Invalid credentials, account locked, or email not verified.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                invalid: { value: { success: false, message: "Invalid credentials", errors: [] } }
+                locked: { value: { success: false, message: "Account is locked. Try again after 120 seconds.", errors: [] } }
+                unverified: { value: { success: false, message: "pls verify email", errors: [] } }
+        '422':
+          description: Email validation failed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
+        '429':
+          description: Too many login attempts from this IP. `errors.retryAfter` is seconds remaining.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RateLimitErrorResponse' }
+              example: { success: false, message: "Too many login attempts.", errors: { retryAfter: 118 } }
+
+  /pulse/users/logout:
+    get:
+      tags: [Authentication]
+      summary: Log out
+      description: Blacklists the access token, drops the refresh entry, and clears both cookies.
+      security:
+        - accessTokenCookie: []
+      responses:
+        '200':
+          description: Logged out. Clears the auth cookies.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 200, data: {}, message: "logout sucessful", sucess: true }
+        '401':
+          description: Missing/invalid token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /pulse/users/rotateToken:
+    post:
+      tags: [Authentication]
+      summary: Rotate the access/refresh tokens
+      description: Uses the `refreshToken` cookie to issue a new access + refresh pair.
+      security:
+        - refreshTokenCookie: []
+      responses:
+        '200':
+          description: Rotated. Sets new `accessToken` and `refreshToken` cookies.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/SetAuthCookies' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 200, data: {}, message: "token rotated sucessfully", sucess: true }
+        '400':
+          description: Invalid refresh token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "invalid token", errors: [] }
+        '401':
+          description: Refresh token missing.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "Refresh token missing", errors: [] }
+
+  /pulse/users/forgotPassword:
+    post:
+      tags: [Password Reset]
+      summary: Request a password-reset email
+      description: >
+        Always responds 200 with a neutral message (no account-existence leak). If the email
+        exists, emails a reset link built from `resetBase` (validated against `ALLOWED_RESET_BASES`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, resetBase]
+              properties:
+                email: { type: string, format: email }
+                resetBase: { type: string, example: http://localhost:5173/resetPassword }
+      responses:
+        '200':
+          description: Neutral acknowledgement (sent if the email exists).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 200, data: {}, message: "If the email exists, a reset link has been sent", sucess: true }
+        '400':
+          description: '`resetBase` not allowed.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "invalid reset url", errors: [] }
+        '422':
+          description: Email validation failed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
+
+  /pulse/users/resetPassword/{token}:
+    post:
+      tags: [Password Reset]
+      summary: Reset the password using a reset token
+      description: >
+        Token is validated first (expiry/used), then the password policy, then the controller
+        checks (match, email matches account, not same as old).
+      parameters:
+        - $ref: '#/components/parameters/TokenPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, newPassword, confirmPassword]
+              properties:
+                email: { type: string, format: email }
+                newPassword: { type: string }
+                confirmPassword: { type: string }
+      responses:
+        '200':
+          description: Password updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 200, data: {}, message: "password updated sucessfully", sucess: true }
+        '400':
+          description: Passwords don't match, same as old, email mismatch, or user not found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                mismatch: { value: { success: false, message: "Passwords doesn't match", errors: [] } }
+                sameAsOld: { value: { success: false, message: "password cannot be same as old password", errors: [] } }
+                emailMismatch: { value: { success: false, message: "invalid credential", errors: [] } }
+        '401':
+          description: Token expired or already used.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                expired: { value: { success: false, message: "Token expired", errors: [] } }
+                used: { value: { success: false, message: "token already is used", errors: [] } }
+        '403':
+          description: Token not found / invalid.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "Invalid Token", errors: [] }
+        '422':
+          description: Password policy validation failed (per field).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
+
+  /pulse/users/resetResend/{token}:
+    post:
+      tags: [Password Reset]
+      summary: Resend the password-reset link
+      description: Resolves the (expired) reset token to its user and emails a fresh reset link.
+      parameters:
+        - $ref: '#/components/parameters/TokenPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resetBase]
+              properties:
+                resetBase: { type: string, example: http://localhost:5173/resetPassword }
+      responses:
+        '200':
+          description: A new password reset email has been sent.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 200, data: {}, message: "A new password reset email has been sent.", sucess: true }
+        '400':
+          description: Invalid token, `resetBase` not allowed, or user not found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                invalidToken: { value: { success: false, message: "invalid token", errors: [] } }
+                badResetBase: { value: { success: false, message: "invalid reset url", errors: [] } }
+
+  /pulse/users/changePassword:
+    post:
+      tags: [Account]
+      summary: Change password (authenticated)
+      description: Requires a valid `accessToken` cookie. Verifies the old password and policy.
+      security:
+        - accessTokenCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [oldPassword, newPassword, confirmPassword]
+              properties:
+                oldPassword: { type: string }
+                newPassword: { type: string }
+                confirmPassword: { type: string }
+      responses:
+        '200':
+          description: Password changed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 200, data: {}, message: "password reseted sucessfully", sucess: true }
+        '400':
+          description: Old password wrong, new≠confirm, or same as old.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                oldWrong: { value: { success: false, message: "old password doesnt match", errors: [] } }
+                mismatch: { value: { success: false, message: "new and confirm password are wrong", errors: [] } }
+                sameAsOld: { value: { success: false, message: "new password must not be same as old one", errors: [] } }
+        '401':
+          description: Not authenticated (missing/expired/invalid token).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "token revoked", errors: [] }
+        '422':
+          description: Password policy validation failed (per field).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
+
+  /pulse/users/me:
+    get:
+      tags: [Account]
+      summary: Get the authenticated user
+      description: Returns the current user's email (read from the access token). Requires the `accessToken` cookie.
+      security:
+        - accessTokenCookie: []
+      responses:
+        '200':
+          description: Authenticated. `data` is the user's email string.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data: { type: string, example: you@domain.com }
+              example: { statuscode: 200, data: "you@domain.com", message: "user authenticated sucessfully", sucess: true }
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+components:
+  securitySchemes:
+    accessTokenCookie:
+      type: apiKey
+      in: cookie
+      name: accessToken
+    refreshTokenCookie:
+      type: apiKey
+      in: cookie
+      name: refreshToken
+
+  parameters:
+    TokenPath:
+      name: token
+      in: path
+      required: true
+      description: The raw (unhashed) token from the emailed link.
+      schema: { type: string }
+
+  headers:
+    SetAuthCookies:
+      description: Sets `accessToken` and `refreshToken` as httpOnly cookies.
+      schema: { type: string }
+      example: "accessToken=...; HttpOnly; Path=/, refreshToken=...; HttpOnly; Path=/"
+
+  schemas:
+    SuccessResponse:
+      type: object
+      description: Standard success envelope (note the success flag is spelled `sucess`).
+      properties:
+        statuscode: { type: integer, example: 200 }
+        data: { description: Payload (object, or a string for /me). }
+        message: { type: string }
+        sucess: { type: boolean, example: true }
+
+    ErrorResponse:
+      type: object
+      description: Standard error envelope from the global error handler.
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+        errors:
+          description: Empty array for most errors; an array of field errors for 422.
+          example: []
+      required: [success, message]
+
+    ValidationErrorResponse:
+      type: object
+      description: 422 from express-validator. `errors` lists each failed field.
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string, example: "Invalid credential" }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, example: field }
+              value: { type: string }
+              msg: { type: string, example: "Invalid email address" }
+              path: { type: string, example: email }
+              location: { type: string, example: body }
+      example:
+        success: false
+        message: "Invalid credential"
+        errors:
+          - { type: field, value: "", msg: "Email is required", path: email, location: body }
+
+    RateLimitErrorResponse:
+      type: object
+      description: 429 from the login middleware; `errors.retryAfter` is seconds remaining.
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string, example: "Too many login attempts." }
+        errors:
+          type: object
+          properties:
+            retryAfter: { type: integer, example: 118 }
