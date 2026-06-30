@@ -43,7 +43,7 @@ const sendEmail =async function(options)
     theme: 'default',
     product: {
         name: 'Pulse',
-        link: 'https://pulse.com'    
+        link: 'https://localhost:8000/'    
     }
     });
    const  textEmail=mailGenerator.generatePlaintext(options.emailContent)
