@@ -92,12 +92,26 @@ export const resetPassword=asyncHandler(async(req,res)=>{
 })
 export const login=asyncHandler(async(req,res)=>{
      const MAX_ATTEMPTS = 5;
+     const MAX_IP_ATTEMPTS=10;
      const key = `login:ip:${req.ip}`;
      const {email,password}=req.body
      const[user]=await db.select({id:users.userId,locked:users.isLocked,lockedUntil:users.lockedUntil,limit:users.failedLoginAttempts,verified:users.isVerified,password:users.password}).from(users).where(eq(users.email,email))
      if(!user)
      {
         await redisClient.incr(key);
+        const attempts = Number(await redisClient.get(key));
+
+       if (attempts >= MAX_IP_ATTEMPTS) {
+        const ttl = await redisClient.ttl(key);
+
+         throw new ApiError(
+          429,
+           "Too many login attempts.",
+          {
+              retryAfter: ttl
+           }
+           );
+         }
         throw new ApiError(401,"invalid credential")
     }
     if(user.locked)

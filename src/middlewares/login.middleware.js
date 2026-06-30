@@ -4,7 +4,7 @@ import {redisClient} from "../db/redis.js";
 import ApiError from "../utils/api-error.js";
 import {asyncHandler} from "../utils/async-handler.js";
 
-const MAX_IP_ATTEMPTS = 5;
+const MAX_IP_ATTEMPTS = 10;
 const IP_COUNTER_EXPIRY = 2 * 60;
 
 export const loginMiddleware = asyncHandler(async (req, res, next) => {
