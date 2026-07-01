@@ -21,7 +21,6 @@ export const signup=asyncHandler(async(req,res)=>{
     }
     const hash=await hashPassword(password)
     const [user]=await db.insert(users).values({password:hash,email:email}).returning({id:users.userId})
-    await db.delete(emailVerify).where(eq(emailVerify.userId, user.id));
     const{unhashedToken,hashedToken,tokenExpiry}=tokenGeneration()
     await db.insert(emailVerify).values({token:hashedToken,tokenExpiry:tokenExpiry,userId:user.id})
     await sendEmail({email:email,subject:"please verify your email",emailContent:emailVerification("there",`${base}/${unhashedToken}`)})
