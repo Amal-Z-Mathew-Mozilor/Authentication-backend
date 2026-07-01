@@ -126,11 +126,12 @@ export const login=asyncHandler(async(req,res)=>{
     if (!result) {
     const limit = user.limit + 1;
 
-    await redisClient.incr(key);
-
+    const attempt=await redisClient.incr(key);
+    if(limit >= MAX_ATTEMPTS ||attempt >= MAX_IP_ATTEMPTS){
+      let remainingTime=0
     if (limit >= MAX_ATTEMPTS) {
         const lockedUntil = new Date(Date.now() + 2 * 60 * 1000);
-
+      
         await db.update(users)
             .set({
                 failedLoginAttempts: limit,
@@ -139,10 +140,22 @@ export const login=asyncHandler(async(req,res)=>{
             })
             .where(eq(users.userId, user.id));
 
-        const remainingTime = Math.ceil(
+         remainingTime = Math.ceil(
             (lockedUntil.getTime() - Date.now()) / 1000
         );
+      }
 
+       if (attempt >= MAX_IP_ATTEMPTS) {
+        const ttl = await redisClient.ttl(key);
+
+         throw new ApiError(
+          429,
+           "Too many login attempts.",
+          {
+              retryAfter: ttl
+           }
+           );
+        }
         throw new ApiError(
             401,
             `Account is locked. Try again after ${remainingTime} seconds.`
