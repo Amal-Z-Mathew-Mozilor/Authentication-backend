@@ -41,8 +41,7 @@ src/
 │   ├── login.middleware.js       # loginMiddleware() — per-IP rate limit + email validation
 │   ├── passwordReset.middleware.js   # tokenValidation() — validates reset token (ACTIVE one)
 │   ├── passwordResend.middleware.js  # resetTokenResolve() — reset token → req.user.id (for resend)
-│   ├── emailVerify.middleware.js     # emailTokenValidation() — verify token → req.user.id (for resend)
-│   └── tokenValidation.middleware.js # ⚠️ UNUSED/broken duplicate — not wired in routes; ignore it
+│   └── emailVerify.middleware.js     # emailTokenValidation() — verify token → req.user.id (for resend)
 ├── models/                       # drizzle schemas: userschema, email_verification, password_reset (+ index)
 ├── validators/user.validator.js  # register/login/forgot/reset/changePassword validators (use .bail())
 ├── utils/
@@ -112,8 +111,9 @@ route or `res.redirect` to the frontend.
 - **Secrets must not contain `$`.** Docker Compose interpolates `$word` in `env_file` values →
   blanks them. Use plain hex/base64 for `*_SECRETKEY` (`openssl rand -hex 32`).
 - **`REFRESH_EXPIRY`** must include units (`7d`, `12h`) — a bare `"604800"` is parsed as *ms*.
-- `src/middlewares/tokenValidation.middleware.js` is an **unused, broken duplicate**; the active
-  reset-token middleware is `passwordReset.middleware.js`.
+- The active reset-token middleware is **`passwordReset.middleware.js`** (exported as
+  `tokenValidation`). Don't confuse the export name with a filename — there is no
+  `tokenValidation.middleware.js` (a dead duplicate by that name was removed).
 - Tables are created via **`drizzle-kit push`** (no migrations dir). Fresh DB (incl. a new Docker
   volume) has no tables until you push — the compose `backend` command auto-pushes on start.
 
