@@ -8,7 +8,7 @@ const emailVerification=(username,verificationurl)=>
         name: username,
         intro: 'Welcome to Pulse! We\'re very excited to have you on board.',
         action: {
-            instructions: 'To get started with Us, please Verify your eamil:',
+            instructions: 'To get started with Us, please verify your email:',
             button: {
                 color: '#22BC66', 
                 text: 'Verify',
