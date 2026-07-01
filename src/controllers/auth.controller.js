@@ -61,6 +61,11 @@ export const forgotPassword=asyncHandler(async(req,res)=>{
     await sendEmail({email:user.email,subject:"To reset your password please verify your email",emailContent:passwordResetVerification("there",`${base}/${unhashedToken}`)})
     return res.status(200).json(new ApiResponse(200,{},"If the email exists, a reset link has been sent"))
 })
+export const checkResetToken=asyncHandler(async(req,res)=>{
+    // tokenValidation already ran: it throws 401/403 for expired/used/invalid tokens.
+    // Reaching here means the token is valid. Read-only check — token is NOT consumed.
+    return res.status(200).json(new ApiResponse(200,{},"valid"))
+})
 export const resetPassword=asyncHandler(async(req,res)=>{
   
    const{newPassword,confirmPassword,email}=req.body

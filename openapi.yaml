@@ -271,6 +271,38 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
 
+  /pulse/users/resetPassword/{token}/check:
+    get:
+      tags: [Password Reset]
+      summary: Check whether a reset token is valid (read-only)
+      description: >
+        Runs the same token validation as the reset submit (expiry/used/not-found) but does NOT
+        consume the token. The client calls this on page load to decide whether to show the reset
+        form. Returns 200 when valid; 401/403 otherwise (same messages as the reset submit).
+      parameters:
+        - $ref: '#/components/parameters/TokenPath'
+      responses:
+        '200':
+          description: Token is valid.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 200, data: {}, message: "valid", sucess: true }
+        '401':
+          description: Token expired or already used.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              examples:
+                expired: { value: { success: false, message: "Token expired", errors: [] } }
+                used: { value: { success: false, message: "token already is used", errors: [] } }
+        '403':
+          description: Token not found / invalid.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "Invalid Token", errors: [] }
+
   /pulse/users/resetPassword/{token}:
     post:
       tags: [Password Reset]

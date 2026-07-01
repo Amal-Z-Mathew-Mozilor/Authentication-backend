@@ -75,7 +75,13 @@ src/
 
 All under `/pulse/users`. Full spec: **`openapi.yaml`** (keep it updated with changes).
 `signup, verifyMail(POST), resend/:token, login, logout(GET), rotateToken, forgotPassword,
-resetPassword/:token, resetResend/:token, changePassword, me(GET)`.
+resetPassword/:token(POST), resetPassword/:token/check(GET), resetResend/:token, changePassword,
+me(GET)`.
+
+The **`GET /resetPassword/:token/check`** endpoint is a **read-only** token pre-check: it runs the
+same `tokenValidation` middleware and returns `200 "valid"` (or the usual `401`/`403`) **without
+consuming the token**, so the client can validate a reset link on page load before showing the
+form. See `AI_DOCS/reset_token_precheck.md`.
 
 ## Response envelope
 - **Success:** `new ApiResponse(code, data, message)` → `{ statuscode, data, message, sucess }`
