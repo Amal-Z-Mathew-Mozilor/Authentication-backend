@@ -6,7 +6,7 @@ const emailVerification=(username,verificationurl)=>
     return{
      body: {
         name: username,
-        intro: 'Welcome to Product Managemen! We\'re very excited to have you on board.',
+        intro: 'Welcome to Pulse! We\'re very excited to have you on board.',
         action: {
             instructions: 'To get started with Us, please Verify your eamil:',
             button: {
@@ -70,7 +70,5 @@ const sendEmail =async function(options)
     {
         console.log(err)
     }
-
-
 }
 export{emailVerification,passwordResetVerification,sendEmail}
