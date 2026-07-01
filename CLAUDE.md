@@ -21,7 +21,7 @@ node src/app.js                 # start the server (http://localhost:8000). No n
 npx drizzle-kit push            # apply the schema to the DB (creates tables). No migrations folder.
 npx drizzle-kit studio          # DB browser (needs node_modules + DATABASE_URL)
 docker compose up --build       # db + redis + backend (backend auto-runs `drizzle-kit push` on start)
-docker compose --profile ...    # (studio service was removed; run studio manually)
+docker compose --profile studio up --build  # db + redis + backend + Drizzle Studio (opt-in; port 4983)
 ```
 
 Postgres/Redis run via `compose.yaml`. The `backend` service builds `Dockerfile`, waits for

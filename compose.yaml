@@ -46,5 +46,23 @@ services:
       redis:
         condition: service_healthy
 
+  # Drizzle Studio (DB browser). Opt-in — it does NOT start on a plain `docker compose up`.
+  # Run everything incl. studio with:  docker compose --profile studio up
+  # Then open the URL it prints (https://local.drizzle.studio) — it talks to localhost:4983.
+  studio:
+    build: .                       # reuses the backend image (has drizzle-kit + drizzle config)
+    profiles: ["studio"]           # gated behind the "studio" profile
+    command: sh -c "npx drizzle-kit studio --host 0.0.0.0 --port 4983"
+    ports:
+      - "4983:4983"
+    env_file:
+      - .env
+    environment:
+      # Same override as backend — reach the postgres CONTAINER by service name.
+      DATABASE_URL: postgres://postgres:admin@db:5432/postgres
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   db2_data:
