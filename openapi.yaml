@@ -61,13 +61,17 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example: { statuscode: 201, data: {}, message: "Account created successfully. Please verify your email.", sucess: true }
         '400':
-          description: Email already exists, or `verifyBase` not allowed.
+          description: '`verifyBase` not allowed.'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              examples:
-                emailExists: { value: { success: false, message: "email already exist", errors: [] } }
-                badVerifyBase: { value: { success: false, message: "invalid verify url", errors: [] } }
+              example: { success: false, message: "invalid verify url", errors: [] }
+        '409':
+          description: Email already exists.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "email already exist", errors: [] }
         '422':
           description: Validation failed (email/password policy).
           content:
@@ -131,13 +135,25 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example: { statuscode: 200, data: {}, message: "A new verification email has been sent.", sucess: true }
         '400':
-          description: Invalid token, `verifyBase` not allowed, user not found, or already verified.
+          description: '`verifyBase` not allowed, or user not found.'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               examples:
-                invalidToken: { value: { success: false, message: "invalid token", errors: [] } }
-                alreadyVerified: { value: { success: false, message: "email already verified", errors: [] } }
+                badVerifyBase: { value: { success: false, message: "invalid verify url", errors: [] } }
+                userNotFound: { value: { success: false, message: "user doesn't exist", errors: [] } }
+        '403':
+          description: Invalid token (not found).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "invalid token", errors: [] }
+        '409':
+          description: Email already verified.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "email already verified", errors: [] }
 
   /pulse/users/login:
     post:
@@ -166,14 +182,19 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example: { statuscode: 200, data: {}, message: "login sucessfull", sucess: true }
         '401':
-          description: Invalid credentials, account locked, or email not verified.
+          description: Invalid credentials or account locked.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               examples:
                 invalid: { value: { success: false, message: "Invalid credentials", errors: [] } }
                 locked: { value: { success: false, message: "Account is locked. Try again after 120 seconds.", errors: [] } }
-                unverified: { value: { success: false, message: "pls verify email", errors: [] } }
+        '403':
+          description: Email not verified.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "pls verify email", errors: [] }
         '422':
           description: Email validation failed.
           content:
@@ -222,18 +243,14 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example: { statuscode: 200, data: {}, message: "token rotated sucessfully", sucess: true }
-        '400':
-          description: Invalid refresh token.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "invalid token", errors: [] }
         '401':
-          description: Refresh token missing.
+          description: Refresh token missing or invalid.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "Refresh token missing", errors: [] }
+              examples:
+                missing: { value: { success: false, message: "Refresh token missing", errors: [] } }
+                invalid: { value: { success: false, message: "invalid token", errors: [] } }
 
   /pulse/users/forgotPassword:
     post:
@@ -383,13 +400,19 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example: { statuscode: 200, data: {}, message: "A new password reset email has been sent.", sucess: true }
         '400':
-          description: Invalid token, `resetBase` not allowed, or user not found.
+          description: '`resetBase` not allowed, or user not found.'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               examples:
-                invalidToken: { value: { success: false, message: "invalid token", errors: [] } }
                 badResetBase: { value: { success: false, message: "invalid reset url", errors: [] } }
+                userNotFound: { value: { success: false, message: "user doesn't exist", errors: [] } }
+        '403':
+          description: Invalid token (not found).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "invalid token", errors: [] }
 
   /pulse/users/changePassword:
     post:

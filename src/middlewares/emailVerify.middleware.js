@@ -14,7 +14,7 @@ export const emailTokenValidation=asyncHandler(async(req,res,next)=>{
     const [row]=await db.select({userId:emailVerify.userId}).from(emailVerify).where(eq(emailVerify.token,hashedToken))
     if(!row)
     {
-        throw new ApiError(400,"invalid token")
+        throw new ApiError(403,"invalid token")
     }
     req.user={id:row.userId}
     next()

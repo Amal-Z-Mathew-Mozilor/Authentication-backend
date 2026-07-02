@@ -16,7 +16,7 @@ user_route.post("/forgotPassword",forgotPasswordEmail(),validation,forgotPasswor
 user_route.get("/resetPassword/:token/check",tokenValidation,checkResetToken)
 user_route.post("/resetPassword/:token",tokenValidation,resetPasswordValidator(),validation,resetPassword)
 user_route.post("/rotateToken",rotateToken)
-user_route.post("/changePassword",changePasswordValidator(),validation,jwtValidation,changePassword)
+user_route.post("/changePassword",jwtValidation,changePasswordValidator(),validation,changePassword)
 user_route.get("/me",jwtValidation,me)
 user_route.post("/resend/:token",emailTokenValidation,resendVerification)
 user_route.post("/resetResend/:token",resetTokenResolve,resetResend)

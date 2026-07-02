@@ -14,7 +14,7 @@ export const resetTokenResolve=asyncHandler(async(req,res,next)=>{
     const [row]=await db.select({userId:passwordReset.userId}).from(passwordReset).where(eq(passwordReset.token,hashedToken))
     if(!row)
     {
-        throw new ApiError(400,"invalid token")
+        throw new ApiError(403,"invalid token")
     }
     req.user={id:row.userId}
     next()

@@ -17,7 +17,7 @@ export const signup=asyncHandler(async(req,res)=>{
     const [existing]= await db.select({email:users.email}).from(users).where(eq(users.email,email))
     if(existing)
     {
-        throw new ApiError(400,"email already exist")
+        throw new ApiError(409,"email already exist")
     }
     const hash=await hashPassword(password)
     const [user]=await db.insert(users).values({password:hash,email:email}).returning({id:users.userId})
@@ -62,8 +62,8 @@ export const forgotPassword=asyncHandler(async(req,res)=>{
     return res.status(200).json(new ApiResponse(200,{},"If the email exists, a reset link has been sent"))
 })
 export const checkResetToken=asyncHandler(async(req,res)=>{
-    // tokenValidation already ran: it throws 401/403 for expired/used/invalid tokens.
-    // Reaching here means the token is valid. Read-only check — token is NOT consumed.
+  
+    
     return res.status(200).json(new ApiResponse(200,{},"valid"))
 })
 export const resetPassword=asyncHandler(async(req,res)=>{
@@ -174,7 +174,7 @@ export const login=asyncHandler(async(req,res)=>{
     throw new ApiError(401, "Invalid credentials");}
     if(!user.verified)
     {
-        throw new ApiError(401,"pls verify email")
+        throw new ApiError(403,"pls verify email")
     }
      await redisClient.del(key);
      await db.update(users).set({failedLoginAttempts:0}).where(eq(users.userId,user.id))
@@ -207,7 +207,7 @@ export const rotateToken=asyncHandler(async(req,res)=>{
          decoded=await verifyRefresh(refreshToken)
    }catch(err)
    {
-       throw new ApiError(400,"invalid token")
+       throw new ApiError(401,"invalid token")
    }
     await redisClient.del(`refresh:${refreshToken}`)
     const accessToken=await acessSign(decoded.id)
@@ -251,7 +251,7 @@ export const resendVerification=asyncHandler(async(req,res)=>{
     }
     if(user.verified)
     {
-        throw new ApiError(400,"email already verified")
+        throw new ApiError(409,"email already verified")
     }
     const{unhashedToken,hashedToken,tokenExpiry}=tokenGeneration()
     await db.insert(emailVerify).values({token:hashedToken,tokenExpiry:tokenExpiry,userId:id})
