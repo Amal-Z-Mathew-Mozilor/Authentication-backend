@@ -182,13 +182,11 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example: { statuscode: 200, data: {}, message: "login sucessfull", sucess: true }
         '401':
-          description: Invalid credentials or account locked.
+          description: Invalid credentials.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              examples:
-                invalid: { value: { success: false, message: "Invalid credentials", errors: [] } }
-                locked: { value: { success: false, message: "Account is locked. Try again after 120 seconds.", errors: [] } }
+              example: { success: false, message: "Invalid credentials", errors: [] }
         '403':
           description: Email not verified.
           content:
@@ -201,11 +199,15 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
         '429':
-          description: Too many login attempts from this IP. `errors.retryAfter` is seconds remaining.
+          description: >
+            Throttled — either the per-IP attempt limit or a per-account lock (5 failed attempts →
+            locked ~2 min). `errors.retryAfter` is seconds remaining.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RateLimitErrorResponse' }
-              example: { success: false, message: "Too many login attempts.", errors: { retryAfter: 118 } }
+              examples:
+                ipLimit: { value: { success: false, message: "Too many login attempts.", errors: { retryAfter: 118 } } }
+                accountLocked: { value: { success: false, message: "Account is locked. Too many failed attempts.", errors: { retryAfter: 120 } } }
 
   /pulse/users/logout:
     get:

@@ -122,7 +122,7 @@ export const login=asyncHandler(async(req,res)=>{
         if(user.lockedUntil>new Date())
         {
             const remainingTime = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000);
-            throw new ApiError(401,`Account is locked pls try again after${remainingTime}`)
+            throw new ApiError(429,"Account is locked. Too many failed attempts.",{ retryAfter: remainingTime })
         }
         await db.update(users).set({isLocked:false,lockedUntil:null,failedLoginAttempts:0}).where(eq(users.userId,user.id))
         user.limit=0
@@ -162,8 +162,9 @@ export const login=asyncHandler(async(req,res)=>{
            );
         }
         throw new ApiError(
-            401,
-            `Account is locked. Try again after ${remainingTime} seconds.`
+            429,
+            "Account is locked. Too many failed attempts.",
+            { retryAfter: remainingTime }
         );
     }
 
