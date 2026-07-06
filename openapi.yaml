@@ -210,7 +210,7 @@ paths:
                 accountLocked: { value: { success: false, message: "Account is locked. Too many failed attempts.", errors: { retryAfter: 120 } } }
 
   /pulse/users/logout:
-    get:
+    post:
       tags: [Authentication]
       summary: Log out
       description: Blacklists the access token, drops the refresh entry, and clears both cookies.
@@ -291,7 +291,7 @@ paths:
               schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
 
   /pulse/users/resetPassword/{token}/check:
-    get:
+    post:
       tags: [Password Reset]
       summary: Check whether a reset token is valid (read-only)
       description: >
@@ -468,7 +468,7 @@ paths:
               schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
 
   /pulse/users/me:
-    get:
+    post:
       tags: [Account]
       summary: Get the authenticated user
       description: Returns the current user's email (read from the access token). Requires the `accessToken` cookie.

@@ -73,11 +73,12 @@ src/
 ## Endpoints
 
 All under `/pulse/users`. Full spec: **`openapi.yaml`** (keep it updated with changes).
-`signup, verifyMail(POST), resend/:token, login, logout(GET), rotateToken, forgotPassword,
-resetPassword/:token(POST), resetPassword/:token/check(GET), resetResend/:token, changePassword,
-me(GET)`.
+`signup, verifyMail(POST), resend/:token, login, logout, rotateToken, forgotPassword,
+resetPassword/:token(POST), resetPassword/:token/check, resetResend/:token, changePassword,
+me`. **All routes are POST** (the former `GET` routes — `logout`, `resetPassword/:token/check`,
+`me` — were converted; see `AI_DOCS/all_routes_post.md`).
 
-The **`GET /resetPassword/:token/check`** endpoint is a **read-only** token pre-check: it runs the
+The **`POST /resetPassword/:token/check`** endpoint is a **read-only** token pre-check: it runs the
 same `tokenValidation` middleware and returns `200 "valid"` (or the usual `401`/`403`) **without
 consuming the token**, so the client can validate a reset link on page load before showing the
 form. See `AI_DOCS/reset_token_precheck.md`.
@@ -105,7 +106,26 @@ route or `res.redirect` to the frontend.
 ## Environment (`.env`, gitignored — see `.env.example` if present)
 `PORT`, `NODE_ENV`, `ACCESS_SECRETKEY`, `REFRESH_SECRETKEY`, `ACCESS_EXPIRY`, `REFRESH_EXPIRY`,
 `DATABASE_URL`, `REDIS_URL`, `MAIL_HOST`/`MAIL_PORT`/`MAIL_USER`/`MAIL_PASSWORD`,
-`ALLOWED_VERIFY_BASES`, `ALLOWED_RESET_BASES`.
+`ALLOWED_VERIFY_BASES`, `ALLOWED_RESET_BASES`, `TRUST_PROXY_HOPS`, `COOKIE_SAMESITE`, `CORS_ORIGINS`.
+
+- **`CORS_ORIGINS`** — comma-separated allowlist of cross-origin frontends (scheme+host+port, no
+  trailing slash) permitted to make credentialed requests. Default `http://localhost:5173` (Vite
+  dev). Mounted in `app.js` via the `cors` package with `credentials:true` (cookie auth requires a
+  specific echoed origin — `*` is invalid with credentials). Requests with no `Origin` header
+  (curl/Postman/server-to-server) are allowed since CORS is browser-enforced only.
+
+- **`COOKIE_SAMESITE`** — `SameSite` attribute for the auth cookies (default `lax`). `lax` for
+  local dev and same-site prod (subdomains of one domain, or same origin); `none` only for
+  genuinely cross-site deploys (frontend and backend on different registrable domains) — which also
+  requires HTTPS on both ends (the code forces `secure:true` when this is `none`), CORS with
+  credentials, and CSRF tokens. Note: different ports on `localhost` are **same-site**, so `lax`
+  works across the local Docker containers.
+
+- **`TRUST_PROXY_HOPS`** — number of trusted proxies in front of Node (default `0`). Sets
+  Express `trust proxy` so `req.ip` reads the real client IP from `X-Forwarded-For` instead of
+  the load balancer's IP (otherwise the per-IP login limiter blocks *all* traffic through the
+  proxy). Set to `1` behind a single nginx; increase by one per extra hop (CDN/L7 LB). Never
+  set higher than the real hop count — the extra entries are client-spoofable.
 
 ## Gotchas
 - **Secrets must not contain `$`.** Docker Compose interpolates `$word` in `env_file` values →

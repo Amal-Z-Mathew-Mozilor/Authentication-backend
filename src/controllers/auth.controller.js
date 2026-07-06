@@ -45,7 +45,8 @@ export const verifyMail=asyncHandler(async(req,res)=>{
     await db.update(users).set({isVerified:true}).where(eq(users.userId,user.id))
     const accessToken=await acessSign(user.id)
     const refreshToken=await refreshSign(user.id)
-    const options={httpOnly:true,secure:process.env.NODE_ENV === "production"}
+    const sameSite=process.env.COOKIE_SAMESITE || "lax"
+    const options={httpOnly:true,secure:process.env.NODE_ENV === "production" || sameSite==="none",sameSite}
     return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json(new ApiResponse(200,{},"verified"));
 })
 export const forgotPassword=asyncHandler(async(req,res)=>{
@@ -181,7 +182,8 @@ export const login=asyncHandler(async(req,res)=>{
      await db.update(users).set({failedLoginAttempts:0}).where(eq(users.userId,user.id))
     const accessToken=await acessSign(user.id)
     const refreshToken=await refreshSign(user.id)
-    const options={httpOnly:true,secure:process.env.NODE_ENV === "production"}
+    const sameSite=process.env.COOKIE_SAMESITE || "lax"
+    const options={httpOnly:true,secure:process.env.NODE_ENV === "production" || sameSite==="none",sameSite}
     return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json(new ApiResponse(200,{},"login sucessfull")); 
 })
 export const logout=asyncHandler(async(req,res)=>{
@@ -194,7 +196,10 @@ export const logout=asyncHandler(async(req,res)=>{
     await redisClient.del(`refresh:${refreshToken}`)
     const ttl = req.user.exp - Math.floor(Date.now() / 1000);
     await redisClient.set(`blacklist:${req.user.jti}`,"true", {EX: ttl,});
-    return res.status(200).clearCookie("accessToken").clearCookie("refreshToken").json(new ApiResponse(200,{},"logout sucessful"))
+    // clearCookie only removes the cookie if these attributes match the ones it was set with.
+    const sameSite=process.env.COOKIE_SAMESITE || "lax"
+    const options={httpOnly:true,secure:process.env.NODE_ENV === "production" || sameSite==="none",sameSite}
+    return res.status(200).clearCookie("accessToken",options).clearCookie("refreshToken",options).json(new ApiResponse(200,{},"logout sucessful"))
 })
 export const rotateToken=asyncHandler(async(req,res)=>{
    const{ refreshToken }=req.cookies
@@ -213,7 +218,8 @@ export const rotateToken=asyncHandler(async(req,res)=>{
     await redisClient.del(`refresh:${refreshToken}`)
     const accessToken=await acessSign(decoded.id)
     const refresh=await refreshSign(decoded.id)
-    const options={httpOnly:true,secure:process.env.NODE_ENV === "production"}
+    const sameSite=process.env.COOKIE_SAMESITE || "lax"
+    const options={httpOnly:true,secure:process.env.NODE_ENV === "production" || sameSite==="none",sameSite}
     return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refresh,options).json(new ApiResponse(200,{},"token rotated sucessfully"));
 })
 export const changePassword=asyncHandler(async(req,res)=>{
