@@ -11,6 +11,10 @@ import { acessSign, refreshSign, verifyRefresh } from "../utils/jwt.js"
 import {redisClient} from "../db/redis.js"
 import { resolveResetBase } from "../utils/resetBase.js"
 import { resolveVerifyBase } from "../utils/verifyBase.js"
+import { clearAuthCookies } from "../utils/cookies.js"
+import jwt from "jsonwebtoken"
+// The per-user iat-cutoff key (`session:iat:<userId>`) lives as long as the refresh token could.
+const REFRESH_EXPIRY_SECONDS = Number(process.env.REFRESH_EXPIRY_SECONDS) || 604800
 export const signup=asyncHandler(async(req,res)=>{
     const {email,password,verifyBase}=req.body
     const base=resolveVerifyBase(verifyBase)
@@ -45,6 +49,9 @@ export const verifyMail=asyncHandler(async(req,res)=>{
     await db.update(users).set({isVerified:true}).where(eq(users.userId,user.id))
     const accessToken=await acessSign(user.id)
     const refreshToken=await refreshSign(user.id)
+    // initialize the per-user iat cutoff for this new session (NX = don't move an existing cutoff)
+    const { iat }=jwt.decode(accessToken)
+    await redisClient.set(`session:iat:${user.id}`,String(iat),{NX:true,EX:REFRESH_EXPIRY_SECONDS})
     const sameSite=process.env.COOKIE_SAMESITE || "lax"
     const options={httpOnly:true,secure:process.env.NODE_ENV === "production" || sameSite==="none",sameSite}
     return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json(new ApiResponse(200,{},"verified"));
@@ -182,6 +189,9 @@ export const login=asyncHandler(async(req,res)=>{
      await db.update(users).set({failedLoginAttempts:0}).where(eq(users.userId,user.id))
     const accessToken=await acessSign(user.id)
     const refreshToken=await refreshSign(user.id)
+    // initialize the per-user iat cutoff for this new session (NX = don't move an existing cutoff)
+    const { iat }=jwt.decode(accessToken)
+    await redisClient.set(`session:iat:${user.id}`,String(iat),{NX:true,EX:REFRESH_EXPIRY_SECONDS})
     const sameSite=process.env.COOKIE_SAMESITE || "lax"
     const options={httpOnly:true,secure:process.env.NODE_ENV === "production" || sameSite==="none",sameSite}
     return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options).json(new ApiResponse(200,{},"login sucessfull")); 
@@ -196,10 +206,9 @@ export const logout=asyncHandler(async(req,res)=>{
     await redisClient.del(`refresh:${refreshToken}`)
     const ttl = req.user.exp - Math.floor(Date.now() / 1000);
     await redisClient.set(`blacklist:${req.user.jti}`,"true", {EX: ttl,});
-    // clearCookie only removes the cookie if these attributes match the ones it was set with.
-    const sameSite=process.env.COOKIE_SAMESITE || "lax"
-    const options={httpOnly:true,secure:process.env.NODE_ENV === "production" || sameSite==="none",sameSite}
-    return res.status(200).clearCookie("accessToken",options).clearCookie("refreshToken",options).json(new ApiResponse(200,{},"logout sucessful"))
+    // cutoff key is left in place (self-expires via TTL); only clear the cookies.
+    clearAuthCookies(res)
+    return res.status(200).json(new ApiResponse(200,{},"logout sucessful"))
 })
 export const rotateToken=asyncHandler(async(req,res)=>{
    const{ refreshToken }=req.cookies
@@ -215,9 +224,19 @@ export const rotateToken=asyncHandler(async(req,res)=>{
    {
        throw new ApiError(401,"invalid token")
    }
+    // cutoff guard — a refresh token issued before the user's cutoff must not mint a fresh token
+    const cutoff=await redisClient.get(`session:iat:${decoded.id}`)
+    if(cutoff && decoded.iat < Number(cutoff))
+    {
+        await redisClient.del(`refresh:${refreshToken}`)
+        clearAuthCookies(res)
+        throw new ApiError(401,"Session invalidated, please login again")
+    }
     await redisClient.del(`refresh:${refreshToken}`)
     const accessToken=await acessSign(decoded.id)
     const refresh=await refreshSign(decoded.id)
+    // extend the cutoff key's TTL for this active session (value unchanged); no-op if absent
+    await redisClient.expire(`session:iat:${decoded.id}`,REFRESH_EXPIRY_SECONDS)
     const sameSite=process.env.COOKIE_SAMESITE || "lax"
     const options={httpOnly:true,secure:process.env.NODE_ENV === "production" || sameSite==="none",sameSite}
     return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refresh,options).json(new ApiResponse(200,{},"token rotated sucessfully"));
@@ -242,6 +261,10 @@ export const changePassword=asyncHandler(async(req,res)=>{
    }
   const hash=await hashPassword(newPassword)
   await db.update(users).set({password:hash}).where(eq(users.userId,req.user.id))
+  // bump the cutoff to now → every existing access/refresh token (iat < now) is invalidated,
+  // logging the user out of every browser/device on their next request.
+  const now=Math.floor(Date.now()/1000)
+  await redisClient.set(`session:iat:${req.user.id}`,String(now),{EX:REFRESH_EXPIRY_SECONDS})
   return res.status(200).json(new ApiResponse(200,{},"password reseted sucessfully"))
 })
 export const me=asyncHandler(async(req,res)=>{

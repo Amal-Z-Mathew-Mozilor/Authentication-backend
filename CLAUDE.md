@@ -8,7 +8,8 @@ client lives in a separate repo (`../frontend`).
 
 - **Node.js + Express 5**, ES modules (`"type": "module"`) — entry `src/app.js`.
 - **Postgres** via **drizzle-orm** (`node-postgres`/`pg`); schema in `src/models/`.
-- **Redis** (`redis` client) — refresh-token store, access-token blacklist, per-IP login counter.
+- **Redis** (`redis` client) — refresh-token store, access-token blacklist, per-IP login counter,
+  per-user `iat` cutoff (`session:iat:<userId>` — see Login protection / `AI_DOCS/session_iat_invalidation.md`).
 - **JWT** (`jsonwebtoken`) access + refresh tokens; **bcrypt** for password hashing.
 - **express-validator** for input validation; **nodemailer** + **mailgen** for emails.
 
@@ -69,6 +70,13 @@ src/
 - **Login protection:** per-account lockout (5 failed attempts → locked ~2 min, in the `users`
   table) **and** a broader per-IP limit (`MAX_IP_ATTEMPTS = 10`, in Redis, `loginMiddleware`).
   The IP limit is intentionally higher than the account limit so they don't collide.
+- **Session invalidation (`session:iat:<userId>`):** a per-user Redis timestamp = the minimum
+  acceptable token `iat`. Set (NX + TTL=`REFRESH_EXPIRY_SECONDS`) on login/verifyMail, TTL refreshed
+  on `rotateToken`, and **bumped to now on `changePassword`** — which invalidates every existing
+  access/refresh token (logs the user out everywhere). Enforced in **both** `jwtValidation` and
+  `rotateToken` (`iat < cutoff` → `401 "Session invalidated, please login again"` + cookies cleared
+  via `utils/cookies.js` `clearAuthCookies`). Not deleted on logout; `resetPassword` is excluded.
+  See `AI_DOCS/session_iat_invalidation.md`.
 
 ## Endpoints
 
