@@ -1,14 +1,14 @@
-import {validationResult} from "express-validator"
+import { validationResult } from 'express-validator'
 import ApiError from '../utils/api-error.js'
 
-export const validation=function(req,res,next){
-    const error= validationResult(req)
-    if(error.isEmpty())
-    {
-        return next();
-    }
-    const extractedErrors=[]
-    error.array().map((err)=>{extractedErrors.push(err)})
-    throw new ApiError(422,"Invalid credential",extractedErrors)
+export const validation = function (req, res, next) {
+  const error = validationResult(req)
+  if (error.isEmpty()) {
+    return next()
+  }
+  const extractedErrors = []
+  error.array().map((err) => {
+    extractedErrors.push(err)
+  })
+  throw new ApiError(422, 'Invalid credential', extractedErrors)
 }
-
