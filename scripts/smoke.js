@@ -142,6 +142,29 @@ async function main() {
       `got ${wList.status}`,
     )
 
+    // Cookie policy (About cookies) for the created website
+    const cpGet0 = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
+    check('cookie policy GET → 200 (empty ok)', cpGet0.status === 200, `got ${cpGet0.status}`)
+
+    const cpPut = await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy`, {
+      heading: 'What are cookies?',
+      description: 'Smoke test description.',
+    })
+    check('cookie policy PUT → 200', cpPut.status === 200, `got ${cpPut.status}`)
+
+    const cpGet1 = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
+    const cpBody = await cpGet1.json().catch(() => ({}))
+    check(
+      'cookie policy persisted aboutCookies.heading',
+      cpBody?.data?.content?.aboutCookies?.heading === 'What are cookies?',
+    )
+
+    const cpNotOwned = await apiAt(
+      'GET',
+      '/pulse/websites/00000000-0000-0000-0000-000000000000/cookie-policy',
+    )
+    check('cookie policy of non-owned website → 404', cpNotOwned.status === 404, `got ${cpNotOwned.status}`)
+
     const wEdit = await apiAt('PUT', `/pulse/websites/${wid}`, {
       name: 'Smoke Site v2',
       url: 'https://smoke2.example.com',

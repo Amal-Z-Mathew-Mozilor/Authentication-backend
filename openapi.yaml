@@ -26,6 +26,7 @@ tags:
   - name: Password Reset
   - name: Account
   - name: Websites
+  - name: Cookie Policy
 
 paths:
   /pulse/users/signup:
@@ -659,6 +660,93 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               example: { success: false, message: "website not found", errors: [] }
+
+  /pulse/websites/{websiteId}/cookie-policy:
+    parameters:
+      - name: websiteId
+        in: path
+        required: true
+        description: The website id (uuid).
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Cookie Policy]
+      summary: Get a website's cookie policy
+      description: Returns the cookie-policy content for a website the user owns (empty object if none yet).
+      security:
+        - accessTokenCookie: []
+      responses:
+        '200':
+          description: The cookie policy content.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example:
+                statuscode: 200
+                data: { content: { aboutCookies: { heading: "What are cookies?", description: "This Cookie Policy explains…" } } }
+                message: "cookie policy fetched sucessfully"
+                sucess: true
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Website not found (or not owned by the user).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "website not found", errors: [] }
+    put:
+      tags: [Cookie Policy]
+      summary: Save the About cookies section
+      description: Upserts the `aboutCookies` section of the website's cookie policy.
+      security:
+        - accessTokenCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                heading: { type: string, maxLength: 255, example: "What are cookies?" }
+                description: { type: string, maxLength: 20000 }
+      responses:
+        '200':
+          description: Saved; returns the updated content.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example:
+                statuscode: 200
+                data: { content: { aboutCookies: { heading: "What are cookies?", description: "…" } } }
+                message: "cookie policy updated sucessfully"
+                sucess: true
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Website not found (or not owned by the user).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Validation failed (heading/description length).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
 
 components:
   securitySchemes:

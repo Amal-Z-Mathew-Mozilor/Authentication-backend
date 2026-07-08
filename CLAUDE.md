@@ -35,10 +35,11 @@ db/redis healthchecks, and connects by service name (`db:5432`, `redis:6379`).
 src/
 ├── app.js                       # express app, mounts /pulse/users + /pulse/websites, global error handler, listen
 ├── routes/auth.routes.js        # all auth routes + their middleware chains
-├── routes/website.routes.js     # /pulse/websites CRUD routes (all behind jwtValidation)
+├── routes/website.routes.js     # /pulse/websites CRUD + nested cookie-policy routes (all behind jwtValidation)
 ├── controllers/auth.controller.js   # signup, verifyMail, login, logout, forgot/reset, rotateToken,
 │                                     # changePassword, me, resendVerification, resetResend
 ├── controllers/website.controller.js # listWebsites, createWebsite, updateWebsite, deleteWebsite (user-scoped)
+├── controllers/cookiePolicy.controller.js # getCookiePolicy, putAboutCookies (jsonb content, ownership-checked)
 ├── middlewares/
 │   ├── auth.middleware.js        # validation() — turns express-validator errors into 422
 │   ├── jwt.middleware.js         # jwtValidation() — verifies accessToken cookie, checks blacklist
@@ -46,9 +47,10 @@ src/
 │   ├── passwordReset.middleware.js   # tokenValidation() — validates reset token (ACTIVE one)
 │   ├── passwordResend.middleware.js  # resetTokenResolve() — reset token → req.user.id (for resend)
 │   └── emailVerify.middleware.js     # emailTokenValidation() — verify token → req.user.id (for resend)
-├── models/                       # drizzle schemas: userschema, email_verification, password_reset, websites (+ index)
+├── models/                       # drizzle schemas: userschema, email_verification, password_reset, websites, cookie_policy (+ index)
 ├── validators/user.validator.js  # register/login/forgot/reset/changePassword validators (use .bail())
 ├── validators/website.validator.js  # websiteValidator() — name + url (use .bail())
+├── validators/cookiePolicy.validator.js  # aboutCookiesValidator() — heading + description
 ├── scripts/smoke.js              # auth + website CRUD smoke test (npm run smoke)
 ├── utils/
 │   ├── jwt.js                    # acessSign, refreshSign, verifyAccess, verifyRefresh
@@ -69,6 +71,16 @@ All routes require the `accessToken` cookie (`jwtValidation`) and are scoped to
 `users.user_id` (`onDelete: cascade`); a future cookie-policy table will FK
 `websites.id` with the same cascade. Responses reuse the shared envelopes
 (`422` validation, `404` not-found/not-owned). See `openapi.yaml`.
+
+## Cookie Policy resource (`/pulse/websites/:websiteId/cookie-policy`)
+
+One `cookie_policy` row per website (1:1; `website_id` unique, FK → `websites.id`
+`onDelete: cascade`). Section content lives in a single **jsonb `content`** column,
+keyed by section — currently `{ aboutCookies: { heading, description } }`; later
+sections add sibling keys with no migration. Routes (nested, behind `jwtValidation`,
+ownership verified via the website's owner): `GET` returns `content` (or `{}`);
+`PUT` upserts the About cookies section (body `{ heading, description }`). `description`
+is HTML from the Tiptap editor. See `openapi.yaml`.
 
 ## Auth model
 
