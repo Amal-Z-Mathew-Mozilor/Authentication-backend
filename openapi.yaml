@@ -25,6 +25,7 @@ tags:
   - name: Verification
   - name: Password Reset
   - name: Account
+  - name: Websites
 
 paths:
   /pulse/users/signup:
@@ -496,6 +497,168 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /pulse/websites:
+    get:
+      tags: [Websites]
+      summary: List the current user's websites
+      description: Returns all websites owned by the authenticated user, newest first.
+      security:
+        - accessTokenCookie: []
+      responses:
+        '200':
+          description: The user's websites.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example:
+                statuscode: 200
+                data:
+                  - { id: "b1c2…", name: "My site", url: "https://example.com", createdAt: "2026-07-08T10:00:00.000Z", updatedAt: "2026-07-08T10:00:00.000Z" }
+                message: "websites fetched sucessfully"
+                sucess: true
+        '401':
+          description: Not authenticated (missing/expired/invalid token).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "token revoked", errors: [] }
+    post:
+      tags: [Websites]
+      summary: Add a website
+      description: Registers a new website (name + URL) for the authenticated user.
+      security:
+        - accessTokenCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, url]
+              properties:
+                name: { type: string, maxLength: 255, example: My site }
+                url: { type: string, format: uri, example: https://example.com }
+      responses:
+        '201':
+          description: Website created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example:
+                statuscode: 201
+                data: { id: "b1c2…", name: "My site", url: "https://example.com", createdAt: "2026-07-08T10:00:00.000Z" }
+                message: "website added sucessfully"
+                sucess: true
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Validation failed (name/url).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
+
+  /pulse/websites/{id}:
+    put:
+      tags: [Websites]
+      summary: Update a website
+      description: Updates the name/URL of a website owned by the authenticated user.
+      security:
+        - accessTokenCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The website id (uuid).
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, url]
+              properties:
+                name: { type: string, maxLength: 255 }
+                url: { type: string, format: uri }
+      responses:
+        '200':
+          description: Website updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 200, data: { id: "b1c2…", name: "New name", url: "https://example.com", updatedAt: "2026-07-08T10:05:00.000Z" }, message: "website updated sucessfully", sucess: true }
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Website not found (or not owned by the user).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "website not found", errors: [] }
+        '422':
+          description: Validation failed (name/url).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
+    delete:
+      tags: [Websites]
+      summary: Delete a website
+      description: >
+        Deletes a website owned by the authenticated user. Its associated cookie
+        policy (once that feature exists) is removed via the FK cascade.
+      security:
+        - accessTokenCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The website id (uuid).
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Website deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 200, data: {}, message: "website deleted sucessfully", sucess: true }
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Website not found (or not owned by the user).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "website not found", errors: [] }
 
 components:
   securitySchemes:

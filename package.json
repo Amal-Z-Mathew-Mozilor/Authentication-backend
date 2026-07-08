@@ -1,5 +1,8 @@
 {
   "type": "module",
+  "scripts": {
+    "smoke": "node scripts/smoke.js"
+  },
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",

@@ -21,6 +21,7 @@ Run from `backend/`:
 node src/app.js                 # start the server (http://localhost:8000). No npm start script.
 npx drizzle-kit push            # apply the schema to the DB (creates tables). No migrations folder.
 npx drizzle-kit studio          # DB browser (needs node_modules + DATABASE_URL)
+npm run smoke                   # auth + website CRUD smoke test (needs a running server + DB)
 docker compose up --build       # db + redis + backend (backend auto-runs `drizzle-kit push` on start)
 docker compose --profile studio up --build  # db + redis + backend + Drizzle Studio (opt-in; port 4983)
 ```
@@ -32,10 +33,12 @@ db/redis healthchecks, and connects by service name (`db:5432`, `redis:6379`).
 
 ```
 src/
-├── app.js                       # express app, mounts /pulse/users, global error handler, listen
-├── routes/auth.routes.js        # all routes + their middleware chains
+├── app.js                       # express app, mounts /pulse/users + /pulse/websites, global error handler, listen
+├── routes/auth.routes.js        # all auth routes + their middleware chains
+├── routes/website.routes.js     # /pulse/websites CRUD routes (all behind jwtValidation)
 ├── controllers/auth.controller.js   # signup, verifyMail, login, logout, forgot/reset, rotateToken,
 │                                     # changePassword, me, resendVerification, resetResend
+├── controllers/website.controller.js # listWebsites, createWebsite, updateWebsite, deleteWebsite (user-scoped)
 ├── middlewares/
 │   ├── auth.middleware.js        # validation() — turns express-validator errors into 422
 │   ├── jwt.middleware.js         # jwtValidation() — verifies accessToken cookie, checks blacklist
@@ -43,8 +46,10 @@ src/
 │   ├── passwordReset.middleware.js   # tokenValidation() — validates reset token (ACTIVE one)
 │   ├── passwordResend.middleware.js  # resetTokenResolve() — reset token → req.user.id (for resend)
 │   └── emailVerify.middleware.js     # emailTokenValidation() — verify token → req.user.id (for resend)
-├── models/                       # drizzle schemas: userschema, email_verification, password_reset (+ index)
+├── models/                       # drizzle schemas: userschema, email_verification, password_reset, websites (+ index)
 ├── validators/user.validator.js  # register/login/forgot/reset/changePassword validators (use .bail())
+├── validators/website.validator.js  # websiteValidator() — name + url (use .bail())
+├── scripts/smoke.js              # auth + website CRUD smoke test (npm run smoke)
 ├── utils/
 │   ├── jwt.js                    # acessSign, refreshSign, verifyAccess, verifyRefresh
 │   ├── token.js                  # tokenGeneration (raw+sha256), hashToken
@@ -54,6 +59,16 @@ src/
 │   ├── api-response.js / api-error.js / async-handler.js
 └── db/                           # index.js (drizzle), redis.js (redis client)
 ```
+
+## Websites resource (`/pulse/websites`)
+
+Per-user website records (name + URL) — the entity a cookie policy will attach to.
+All routes require the `accessToken` cookie (`jwtValidation`) and are scoped to
+`req.user.id`. REST verbs: `GET /` (list, newest first), `POST /` (create),
+`PUT /:id` (update), `DELETE /:id` (delete). The `websites` table FKs
+`users.user_id` (`onDelete: cascade`); a future cookie-policy table will FK
+`websites.id` with the same cascade. Responses reuse the shared envelopes
+(`422` validation, `404` not-found/not-owned). See `openapi.yaml`.
 
 ## Auth model
 
