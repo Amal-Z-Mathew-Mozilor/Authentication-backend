@@ -5,6 +5,10 @@ import { websites, cookiePolicy } from '../models/index.js'
 import { asyncHandler } from '../utils/async-handler.js'
 import { and, eq } from 'drizzle-orm'
 
+// Sections stored as sibling keys in the cookie_policy.content jsonb. Adding a new
+// section (e.g. cookie preferences) is a one-line allowlist entry — no migration.
+const SECTIONS = ['aboutCookies', 'useOfCookies']
+
 // Ownership: the cookie policy is reachable only through a website the user owns.
 async function assertOwnedWebsite(websiteId, userId) {
   const [site] = await db
@@ -26,10 +30,14 @@ export const getCookiePolicy = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, { content }, 'cookie policy fetched sucessfully'))
 })
 
-export const putAboutCookies = asyncHandler(async (req, res) => {
+export const putSection = asyncHandler(async (req, res) => {
+  const { section } = req.params
+  if (!SECTIONS.includes(section))
+    throw new ApiError(404, 'unknown cookie policy section')
+
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
   const { heading = '', description = '' } = req.body
-  const aboutCookies = { heading, description }
+  const sectionData = { heading, description }
 
   const [existing] = await db
     .select({ content: cookiePolicy.content })
@@ -38,12 +46,13 @@ export const putAboutCookies = asyncHandler(async (req, res) => {
 
   let content
   if (!existing) {
-    content = { aboutCookies }
+    content = { [section]: sectionData }
     await db
       .insert(cookiePolicy)
       .values({ websiteId: req.params.websiteId, content })
   } else {
-    content = { ...(existing.content || {}), aboutCookies }
+    // Merge: preserve sibling sections, upsert only this one.
+    content = { ...(existing.content || {}), [section]: sectionData }
     await db
       .update(cookiePolicy)
       .set({ content })

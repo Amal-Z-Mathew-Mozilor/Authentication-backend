@@ -1,6 +1,7 @@
 import { body } from 'express-validator'
-// About cookies section — fields are optional (a draft may be partial).
-export const aboutCookiesValidator = () => {
+// A cookie-policy section (About cookies, Use of cookies, …) — fields are optional
+// (a draft may be partial). Section-agnostic: same heading/description rules for all.
+export const cookieSectionValidator = () => {
   return [
     body('heading')
       .optional()

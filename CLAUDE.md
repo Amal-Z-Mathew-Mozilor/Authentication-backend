@@ -39,7 +39,7 @@ src/
 ├── controllers/auth.controller.js   # signup, verifyMail, login, logout, forgot/reset, rotateToken,
 │                                     # changePassword, me, resendVerification, resetResend
 ├── controllers/website.controller.js # listWebsites, createWebsite, updateWebsite, deleteWebsite (user-scoped)
-├── controllers/cookiePolicy.controller.js # getCookiePolicy, putAboutCookies (jsonb content, ownership-checked)
+├── controllers/cookiePolicy.controller.js # getCookiePolicy, putSection (per-section jsonb upsert, ownership-checked)
 ├── controllers/image.controller.js  # uploadImage (multer→Postgres bytea), getImage (streams bytes)
 ├── routes/image.routes.js       # GET /pulse/images/:id — public image serve
 ├── middlewares/upload.middleware.js  # multer memory storage, png/jpeg filter (imageUpload)
@@ -53,7 +53,7 @@ src/
 ├── models/                       # drizzle schemas: userschema, email_verification, password_reset, websites, cookie_policy, policy_images (+ index)
 ├── validators/user.validator.js  # register/login/forgot/reset/changePassword validators (use .bail())
 ├── validators/website.validator.js  # websiteValidator() — name + url (use .bail())
-├── validators/cookiePolicy.validator.js  # aboutCookiesValidator() — heading + description
+├── validators/cookiePolicy.validator.js  # cookieSectionValidator() — heading + description (any section)
 ├── scripts/smoke.js              # auth + website CRUD smoke test (npm run smoke)
 ├── utils/
 │   ├── jwt.js                    # acessSign, refreshSign, verifyAccess, verifyRefresh
@@ -79,11 +79,13 @@ All routes require the `accessToken` cookie (`jwtValidation`) and are scoped to
 
 One `cookie_policy` row per website (1:1; `website_id` unique, FK → `websites.id`
 `onDelete: cascade`). Section content lives in a single **jsonb `content`** column,
-keyed by section — currently `{ aboutCookies: { heading, description } }`; later
-sections add sibling keys with no migration. Routes (nested, behind `jwtValidation`,
-ownership verified via the website's owner): `GET` returns `content` (or `{}`);
-`PUT` upserts the About cookies section (body `{ heading, description }`). `description`
-is HTML from the Tiptap editor. See `openapi.yaml`.
+keyed by section — currently `{ aboutCookies: {…}, useOfCookies: { heading, description } }`;
+more sections add sibling keys with no migration. Routes (nested, behind `jwtValidation`,
+ownership verified via the website's owner): `GET /cookie-policy` returns the whole
+`content` (or `{}`); `PUT /cookie-policy/:section` upserts one section (body
+`{ heading, description }`), merging so sibling sections are preserved. `:section` is
+allowlisted (`aboutCookies`, `useOfCookies`) — unknown → `404`. `description` is HTML
+from the Tiptap editor. See `openapi.yaml`.
 
 ## Images (`policy_images`)
 

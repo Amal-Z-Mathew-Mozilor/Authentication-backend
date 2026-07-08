@@ -683,7 +683,7 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example:
                 statuscode: 200
-                data: { content: { aboutCookies: { heading: "What are cookies?", description: "This Cookie Policy explains…" } } }
+                data: { content: { aboutCookies: { heading: "What are cookies?", description: "This Cookie Policy explains…" }, useOfCookies: { heading: "How do we use cookies?", description: "Like most online services…" } } }
                 message: "cookie policy fetched sucessfully"
                 sucess: true
         '401':
@@ -702,10 +702,27 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               example: { success: false, message: "website not found", errors: [] }
+  /pulse/websites/{websiteId}/cookie-policy/{section}:
+    parameters:
+      - name: websiteId
+        in: path
+        required: true
+        description: The website id (uuid).
+        schema: { type: string, format: uuid }
+      - name: section
+        in: path
+        required: true
+        description: The cookie-policy section to upsert.
+        schema:
+          type: string
+          enum: [aboutCookies, useOfCookies]
     put:
       tags: [Cookie Policy]
-      summary: Save the About cookies section
-      description: Upserts the `aboutCookies` section of the website's cookie policy.
+      summary: Save a cookie-policy section
+      description: >
+        Upserts one section (`aboutCookies` or `useOfCookies`) of the website's cookie
+        policy, keyed by the `section` path param. Sibling sections are preserved.
+        An unknown section returns `404`.
       security:
         - accessTokenCookie: []
       requestBody:
@@ -715,17 +732,17 @@ paths:
             schema:
               type: object
               properties:
-                heading: { type: string, maxLength: 255, example: "What are cookies?" }
+                heading: { type: string, maxLength: 255, example: "How do we use cookies?" }
                 description: { type: string, maxLength: 20000 }
       responses:
         '200':
-          description: Saved; returns the updated content.
+          description: Saved; returns the full updated content.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example:
                 statuscode: 200
-                data: { content: { aboutCookies: { heading: "What are cookies?", description: "…" } } }
+                data: { content: { aboutCookies: { heading: "What are cookies?", description: "…" }, useOfCookies: { heading: "How do we use cookies?", description: "…" } } }
                 message: "cookie policy updated sucessfully"
                 sucess: true
         '401':
@@ -739,10 +756,11 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
         '404':
-          description: Website not found (or not owned by the user).
+          description: Website not found (or not owned), or unknown section.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "unknown cookie policy section", errors: [] }
         '422':
           description: Validation failed (heading/description length).
           content:

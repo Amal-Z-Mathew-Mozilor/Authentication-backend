@@ -8,10 +8,10 @@ import {
   updateWebsite,
   deleteWebsite,
 } from '../controllers/website.controller.js'
-import { aboutCookiesValidator } from '../validators/cookiePolicy.validator.js'
+import { cookieSectionValidator } from '../validators/cookiePolicy.validator.js'
 import {
   getCookiePolicy,
-  putAboutCookies,
+  putSection,
 } from '../controllers/cookiePolicy.controller.js'
 import { imageUpload } from '../middlewares/upload.middleware.js'
 import { uploadImage } from '../controllers/image.controller.js'
@@ -27,14 +27,15 @@ website_route.put(
 )
 website_route.delete('/:id', jwtValidation, deleteWebsite)
 
-// Cookie policy for a website (nested; ownership via the website's owner)
+// Cookie policy for a website (nested; ownership via the website's owner).
+// GET returns all sections; PUT upserts one section (:section ∈ aboutCookies|useOfCookies).
 website_route.get('/:websiteId/cookie-policy', jwtValidation, getCookiePolicy)
 website_route.put(
-  '/:websiteId/cookie-policy',
+  '/:websiteId/cookie-policy/:section',
   jwtValidation,
-  aboutCookiesValidator(),
+  cookieSectionValidator(),
   validation,
-  putAboutCookies,
+  putSection,
 )
 
 // Image upload for a website's cookie policy (multipart; stored in Postgres bytea)

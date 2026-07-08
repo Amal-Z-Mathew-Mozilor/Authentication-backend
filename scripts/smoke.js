@@ -146,11 +146,20 @@ async function main() {
     const cpGet0 = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
     check('cookie policy GET → 200 (empty ok)', cpGet0.status === 200, `got ${cpGet0.status}`)
 
-    const cpPut = await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy`, {
-      heading: 'What are cookies?',
-      description: 'Smoke test description.',
-    })
-    check('cookie policy PUT → 200', cpPut.status === 200, `got ${cpPut.status}`)
+    const cpPut = await apiAt(
+      'PUT',
+      `/pulse/websites/${wid}/cookie-policy/aboutCookies`,
+      { heading: 'What are cookies?', description: 'Smoke test description.' },
+    )
+    check('cookie policy PUT (aboutCookies) → 200', cpPut.status === 200, `got ${cpPut.status}`)
+
+    // Second section — must persist alongside the first (sibling-key merge)
+    const cpPutUse = await apiAt(
+      'PUT',
+      `/pulse/websites/${wid}/cookie-policy/useOfCookies`,
+      { heading: 'How do we use cookies?', description: 'Use section description.' },
+    )
+    check('cookie policy PUT (useOfCookies) → 200', cpPutUse.status === 200, `got ${cpPutUse.status}`)
 
     const cpGet1 = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
     const cpBody = await cpGet1.json().catch(() => ({}))
@@ -158,6 +167,17 @@ async function main() {
       'cookie policy persisted aboutCookies.heading',
       cpBody?.data?.content?.aboutCookies?.heading === 'What are cookies?',
     )
+    check(
+      'cookie policy persisted useOfCookies.heading (both sections coexist)',
+      cpBody?.data?.content?.useOfCookies?.heading === 'How do we use cookies?',
+    )
+
+    const cpBad = await apiAt(
+      'PUT',
+      `/pulse/websites/${wid}/cookie-policy/nonsense`,
+      { heading: 'x', description: 'y' },
+    )
+    check('cookie policy unknown section → 404', cpBad.status === 404, `got ${cpBad.status}`)
 
     const cpNotOwned = await apiAt(
       'GET',
