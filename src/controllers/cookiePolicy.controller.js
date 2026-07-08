@@ -7,7 +7,7 @@ import { and, eq } from 'drizzle-orm'
 
 // Sections stored as sibling keys in the cookie_policy.content jsonb. Adding a new
 // section (e.g. cookie preferences) is a one-line allowlist entry — no migration.
-const SECTIONS = ['aboutCookies', 'useOfCookies']
+const SECTIONS = ['aboutCookies', 'useOfCookies', 'cookiePreferences']
 
 // Ownership: the cookie policy is reachable only through a website the user owns.
 async function assertOwnedWebsite(websiteId, userId) {
@@ -53,6 +53,35 @@ export const putSection = asyncHandler(async (req, res) => {
   } else {
     // Merge: preserve sibling sections, upsert only this one.
     content = { ...(existing.content || {}), [section]: sectionData }
+    await db
+      .update(cookiePolicy)
+      .set({ content })
+      .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+  }
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { content }, 'cookie policy updated sucessfully'))
+})
+
+// Policy-level metadata (not a section) — currently the effective date. Stored as a
+// top-level key in the same content jsonb, merge-upserted so sections are preserved.
+export const putPolicyMeta = asyncHandler(async (req, res) => {
+  await assertOwnedWebsite(req.params.websiteId, req.user.id)
+  const { effectiveDate = '' } = req.body
+
+  const [existing] = await db
+    .select({ content: cookiePolicy.content })
+    .from(cookiePolicy)
+    .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+
+  let content
+  if (!existing) {
+    content = { effectiveDate }
+    await db
+      .insert(cookiePolicy)
+      .values({ websiteId: req.params.websiteId, content })
+  } else {
+    content = { ...(existing.content || {}), effectiveDate }
     await db
       .update(cookiePolicy)
       .set({ content })

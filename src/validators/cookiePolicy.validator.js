@@ -16,3 +16,17 @@ export const cookieSectionValidator = () => {
       .withMessage('Description must be at most 20000 characters'),
   ]
 }
+
+// Policy-level effective date — optional; when present must be an ISO calendar date
+// (YYYY-MM-DD). The shape check bails first so a bad format shows one clear message.
+export const effectiveDateValidator = () => {
+  return [
+    body('effectiveDate')
+      .optional()
+      .matches(/^\d{4}-\d{2}-\d{2}$/)
+      .withMessage('Effective date must be in YYYY-MM-DD format')
+      .bail()
+      .isISO8601({ strict: true })
+      .withMessage('Effective date must be a valid date'),
+  ]
+}

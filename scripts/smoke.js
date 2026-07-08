@@ -161,6 +161,19 @@ async function main() {
     )
     check('cookie policy PUT (useOfCookies) → 200', cpPutUse.status === 200, `got ${cpPutUse.status}`)
 
+    // Third section + policy-level effective date (base-path PUT)
+    const cpPutPref = await apiAt(
+      'PUT',
+      `/pulse/websites/${wid}/cookie-policy/cookiePreferences`,
+      { heading: 'Manage cookie preferences', description: 'Preferences description.' },
+    )
+    check('cookie policy PUT (cookiePreferences) → 200', cpPutPref.status === 200, `got ${cpPutPref.status}`)
+
+    const cpPutDate = await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy`, {
+      effectiveDate: '2026-07-07',
+    })
+    check('cookie policy PUT (effectiveDate) → 200', cpPutDate.status === 200, `got ${cpPutDate.status}`)
+
     const cpGet1 = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
     const cpBody = await cpGet1.json().catch(() => ({}))
     check(
@@ -171,6 +184,14 @@ async function main() {
       'cookie policy persisted useOfCookies.heading (both sections coexist)',
       cpBody?.data?.content?.useOfCookies?.heading === 'How do we use cookies?',
     )
+    check(
+      'cookie policy persisted cookiePreferences.heading (3 sections coexist)',
+      cpBody?.data?.content?.cookiePreferences?.heading === 'Manage cookie preferences',
+    )
+    check(
+      'cookie policy persisted effectiveDate (meta coexists with sections)',
+      cpBody?.data?.content?.effectiveDate === '2026-07-07',
+    )
 
     const cpBad = await apiAt(
       'PUT',
@@ -178,6 +199,11 @@ async function main() {
       { heading: 'x', description: 'y' },
     )
     check('cookie policy unknown section → 404', cpBad.status === 404, `got ${cpBad.status}`)
+
+    const cpBadDate = await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy`, {
+      effectiveDate: 'not-a-date',
+    })
+    check('cookie policy invalid effectiveDate → 422', cpBadDate.status === 422, `got ${cpBadDate.status}`)
 
     const cpNotOwned = await apiAt(
       'GET',

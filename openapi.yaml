@@ -683,7 +683,7 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example:
                 statuscode: 200
-                data: { content: { aboutCookies: { heading: "What are cookies?", description: "This Cookie Policy explains…" }, useOfCookies: { heading: "How do we use cookies?", description: "Like most online services…" } } }
+                data: { content: { aboutCookies: { heading: "What are cookies?", description: "This Cookie Policy explains…" }, useOfCookies: { heading: "How do we use cookies?", description: "Like most online services…" }, cookiePreferences: { heading: "Manage cookie preferences", description: "You can modify your cookie settings…" }, effectiveDate: "2026-07-07" } }
                 message: "cookie policy fetched sucessfully"
                 sucess: true
         '401':
@@ -702,6 +702,58 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               example: { success: false, message: "website not found", errors: [] }
+    put:
+      tags: [Cookie Policy]
+      summary: Save policy-level metadata (effective date)
+      description: >
+        Upserts policy-level metadata (currently the effective date) into the cookie
+        policy's `content`, merging so sections are preserved. Distinct from
+        `PUT …/cookie-policy/{section}` (which upserts a section's heading/description).
+      security:
+        - accessTokenCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                effectiveDate:
+                  type: string
+                  format: date
+                  example: "2026-07-07"
+                  description: ISO calendar date (YYYY-MM-DD).
+      responses:
+        '200':
+          description: Saved; returns the full updated content.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example:
+                statuscode: 200
+                data: { content: { effectiveDate: "2026-07-07" } }
+                message: "cookie policy updated sucessfully"
+                sucess: true
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Website not found (or not owned by the user).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Validation failed (effectiveDate not a valid YYYY-MM-DD date).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
   /pulse/websites/{websiteId}/cookie-policy/{section}:
     parameters:
       - name: websiteId
@@ -715,7 +767,7 @@ paths:
         description: The cookie-policy section to upsert.
         schema:
           type: string
-          enum: [aboutCookies, useOfCookies]
+          enum: [aboutCookies, useOfCookies, cookiePreferences]
     put:
       tags: [Cookie Policy]
       summary: Save a cookie-policy section

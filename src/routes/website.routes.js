@@ -8,10 +8,14 @@ import {
   updateWebsite,
   deleteWebsite,
 } from '../controllers/website.controller.js'
-import { cookieSectionValidator } from '../validators/cookiePolicy.validator.js'
+import {
+  cookieSectionValidator,
+  effectiveDateValidator,
+} from '../validators/cookiePolicy.validator.js'
 import {
   getCookiePolicy,
   putSection,
+  putPolicyMeta,
 } from '../controllers/cookiePolicy.controller.js'
 import { imageUpload } from '../middlewares/upload.middleware.js'
 import { uploadImage } from '../controllers/image.controller.js'
@@ -28,8 +32,17 @@ website_route.put(
 website_route.delete('/:id', jwtValidation, deleteWebsite)
 
 // Cookie policy for a website (nested; ownership via the website's owner).
-// GET returns all sections; PUT upserts one section (:section ∈ aboutCookies|useOfCookies).
+// GET returns all sections + policy meta. PUT (base) upserts policy meta
+// (effectiveDate); PUT /:section upserts one section
+// (:section ∈ aboutCookies|useOfCookies|cookiePreferences). Distinct paths — no collision.
 website_route.get('/:websiteId/cookie-policy', jwtValidation, getCookiePolicy)
+website_route.put(
+  '/:websiteId/cookie-policy',
+  jwtValidation,
+  effectiveDateValidator(),
+  validation,
+  putPolicyMeta,
+)
 website_route.put(
   '/:websiteId/cookie-policy/:section',
   jwtValidation,
