@@ -27,6 +27,7 @@ tags:
   - name: Account
   - name: Websites
   - name: Cookie Policy
+  - name: Images
 
 paths:
   /pulse/users/signup:
@@ -747,6 +748,91 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
+
+  /pulse/websites/{websiteId}/images:
+    parameters:
+      - name: websiteId
+        in: path
+        required: true
+        description: The website id (uuid).
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Images]
+      summary: Upload an image for a website's cookie policy
+      description: >
+        Uploads a PNG/JPG (multipart field `file`) stored in Postgres and attached to
+        the website's cookie policy (the policy row is created if it doesn't exist yet).
+        Returns the URL to embed. Requires ownership of the website.
+      security:
+        - accessTokenCookie: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary, description: PNG or JPG image }
+      responses:
+        '201':
+          description: Image stored.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example: { statuscode: 201, data: { url: "/pulse/images/b1c2…" }, message: "image uploaded sucessfully", sucess: true }
+        '400':
+          description: No file provided.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "file is required", errors: [] }
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Website not found (or not owned by the user).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "website not found", errors: [] }
+        '415':
+          description: Unsupported media type (only PNG/JPG allowed).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "Only PNG and JPG images are allowed", errors: [] }
+
+  /pulse/images/{id}:
+    get:
+      tags: [Images]
+      summary: Fetch an uploaded image
+      description: Returns the raw image bytes by id. Public (unguessable UUID) so it renders in the editor and on public policy pages.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The image id (uuid).
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The image binary.
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+        '404':
+          description: Image not found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "image not found", errors: [] }
 
 components:
   securitySchemes:

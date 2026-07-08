@@ -16,6 +16,7 @@
     "jsonwebtoken": "^9.0.3",
     "mail": "^0.2.3",
     "mailgen": "^2.0.34",
+    "multer": "^2.2.0",
     "nodemailer": "^9.0.1",
     "pg": "^8.22.0",
     "redis": "^6.0.0"

@@ -33,13 +33,16 @@ db/redis healthchecks, and connects by service name (`db:5432`, `redis:6379`).
 
 ```
 src/
-├── app.js                       # express app, mounts /pulse/users + /pulse/websites, global error handler, listen
+├── app.js                       # express app, mounts /pulse/users + /pulse/websites + /pulse/images, global error handler, listen
 ├── routes/auth.routes.js        # all auth routes + their middleware chains
 ├── routes/website.routes.js     # /pulse/websites CRUD + nested cookie-policy routes (all behind jwtValidation)
 ├── controllers/auth.controller.js   # signup, verifyMail, login, logout, forgot/reset, rotateToken,
 │                                     # changePassword, me, resendVerification, resetResend
 ├── controllers/website.controller.js # listWebsites, createWebsite, updateWebsite, deleteWebsite (user-scoped)
 ├── controllers/cookiePolicy.controller.js # getCookiePolicy, putAboutCookies (jsonb content, ownership-checked)
+├── controllers/image.controller.js  # uploadImage (multer→Postgres bytea), getImage (streams bytes)
+├── routes/image.routes.js       # GET /pulse/images/:id — public image serve
+├── middlewares/upload.middleware.js  # multer memory storage, png/jpeg filter (imageUpload)
 ├── middlewares/
 │   ├── auth.middleware.js        # validation() — turns express-validator errors into 422
 │   ├── jwt.middleware.js         # jwtValidation() — verifies accessToken cookie, checks blacklist
@@ -47,7 +50,7 @@ src/
 │   ├── passwordReset.middleware.js   # tokenValidation() — validates reset token (ACTIVE one)
 │   ├── passwordResend.middleware.js  # resetTokenResolve() — reset token → req.user.id (for resend)
 │   └── emailVerify.middleware.js     # emailTokenValidation() — verify token → req.user.id (for resend)
-├── models/                       # drizzle schemas: userschema, email_verification, password_reset, websites, cookie_policy (+ index)
+├── models/                       # drizzle schemas: userschema, email_verification, password_reset, websites, cookie_policy, policy_images (+ index)
 ├── validators/user.validator.js  # register/login/forgot/reset/changePassword validators (use .bail())
 ├── validators/website.validator.js  # websiteValidator() — name + url (use .bail())
 ├── validators/cookiePolicy.validator.js  # aboutCookiesValidator() — heading + description
@@ -81,6 +84,15 @@ sections add sibling keys with no migration. Routes (nested, behind `jwtValidati
 ownership verified via the website's owner): `GET` returns `content` (or `{}`);
 `PUT` upserts the About cookies section (body `{ heading, description }`). `description`
 is HTML from the Tiptap editor. See `openapi.yaml`.
+
+## Images (`policy_images`)
+
+Editor image uploads are stored **in Postgres** (`bytea`), one row per image, FK →
+`cookie_policy.id` (`onDelete: cascade`). `POST /pulse/websites/:websiteId/images`
+(jwt + ownership, multer memory storage, png/jpeg + magic-byte check, **no size
+limit**; find-or-creates the policy row) → `{ data: { url: "/pulse/images/<id>" } }`.
+`GET /pulse/images/:id` streams the bytes with the stored `Content-Type` — **public**
+(unguessable UUID) so images render in the editor and on public pages. See `openapi.yaml`.
 
 ## Auth model
 

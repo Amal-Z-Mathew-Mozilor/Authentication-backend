@@ -13,6 +13,8 @@ import {
   getCookiePolicy,
   putAboutCookies,
 } from '../controllers/cookiePolicy.controller.js'
+import { imageUpload } from '../middlewares/upload.middleware.js'
+import { uploadImage } from '../controllers/image.controller.js'
 export const website_route = express.Router()
 website_route.get('/', jwtValidation, listWebsites)
 website_route.post('/', jwtValidation, websiteValidator(), validation, createWebsite)
@@ -33,4 +35,12 @@ website_route.put(
   aboutCookiesValidator(),
   validation,
   putAboutCookies,
+)
+
+// Image upload for a website's cookie policy (multipart; stored in Postgres bytea)
+website_route.post(
+  '/:websiteId/images',
+  jwtValidation,
+  imageUpload,
+  uploadImage,
 )

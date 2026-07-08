@@ -165,6 +165,49 @@ async function main() {
     )
     check('cookie policy of non-owned website → 404', cpNotOwned.status === 404, `got ${cpNotOwned.status}`)
 
+    // Image upload (multipart) → serve → reject non-image
+    async function uploadFile(blob, filename) {
+      const fd = new FormData()
+      fd.append('file', blob, filename)
+      const headers = {}
+      const ck = Object.entries(jar)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('; ')
+      if (ck) headers.Cookie = ck
+      return fetch(`${BASE}/pulse/websites/${wid}/images`, {
+        method: 'POST',
+        headers,
+        body: fd,
+      })
+    }
+    const PNG_1x1 =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    const up = await uploadFile(
+      new Blob([Buffer.from(PNG_1x1, 'base64')], { type: 'image/png' }),
+      'x.png',
+    )
+    check('image upload → 201', up.status === 201, `got ${up.status}`)
+    const upBody = await up.json().catch(() => ({}))
+    const imgUrl = upBody?.data?.url
+    check(
+      'image upload returns /pulse/images url',
+      !!imgUrl && imgUrl.startsWith('/pulse/images/'),
+    )
+
+    const imgRes = await fetch(BASE + imgUrl)
+    check(
+      'image serve → 200 image/png',
+      imgRes.status === 200 &&
+        (imgRes.headers.get('content-type') || '').includes('image/png'),
+      `got ${imgRes.status}`,
+    )
+
+    const badUp = await uploadFile(
+      new Blob(['not an image'], { type: 'text/plain' }),
+      'x.txt',
+    )
+    check('non-image upload rejected → 415', badUp.status === 415, `got ${badUp.status}`)
+
     const wEdit = await apiAt('PUT', `/pulse/websites/${wid}`, {
       name: 'Smoke Site v2',
       url: 'https://smoke2.example.com',
