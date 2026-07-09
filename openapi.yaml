@@ -764,6 +764,47 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
+    delete:
+      tags: [Cookie Policy]
+      summary: Delete (reset) a website's cookie policy
+      description: >
+        "Deletes" the cookie policy by RESETTING its `content` to the default seed
+        (the same state a freshly created website's policy has: the three default
+        sections + `effectiveDate` = today, no `completedSections`) and sweeping all
+        of this policy's uploaded images. This is a reset, not a row removal — the
+        `cookie_policy` row is 1:1 with the website (seeded at website create with no
+        independent create path), so resetting keeps the invariant and lets the
+        client reopen the wizard on the default template. Deleting the website itself
+        still hard-removes the row via the FK cascade.
+      security:
+        - accessTokenCookie: []
+      responses:
+        '200':
+          description: Reset done; returns the restored default content.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example:
+                statuscode: 200
+                data: { content: { aboutCookies: { heading: "What are cookies?", description: "This Cookie Policy explains…" }, useOfCookies: { heading: "How do we use cookies?", description: "Like most online services…" }, cookiePreferences: { heading: "Manage cookie preferences", description: "You can modify your cookie settings…" }, effectiveDate: "2026-07-09" } }
+                message: "cookie policy deleted sucessfully"
+                sucess: true
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Website not found (or not owned by the user).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "website not found", errors: [] }
   /pulse/websites/{websiteId}/cookie-policy/{section}:
     parameters:
       - name: websiteId

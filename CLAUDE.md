@@ -96,7 +96,14 @@ website's owner): `GET /cookie-policy` returns the whole `content` (or `{}`);
 `{ effectiveDate }`). Both merge so other keys are preserved. `:section` is allowlisted
 (`aboutCookies`, `useOfCookies`, `cookiePreferences`) — unknown → `404`. `description` is
 HTML from the Tiptap editor. Both PUTs also accept an optional `usedImageIds` array used
-to garbage-collect removed images (see Images). See `openapi.yaml`.
+to garbage-collect removed images (see Images). `DELETE /cookie-policy` (base path)
+**resets** the policy — it overwrites `content` with the default seed
+(`defaultCookieContent(today)`, i.e. the fresh-website state: 3 default sections +
+`effectiveDate` = today, no `completedSections`) and sweeps all of this policy's images.
+It is a **reset, not a row removal** (the `cookie_policy` row is 1:1, seeded at website
+create with no independent create path, so resetting keeps the invariant and lets the UI
+reopen the wizard on the default template); only deleting the website drops the row (FK
+cascade). See `openapi.yaml`.
 
 ## Images (`policy_images`)
 

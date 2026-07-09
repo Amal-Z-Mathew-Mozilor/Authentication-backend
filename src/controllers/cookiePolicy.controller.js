@@ -11,6 +11,7 @@ import {
   sweepOrphanImages,
   assertOwnedWebsite,
 } from '../utils/cookiePolicy.js'
+import { defaultCookieContent } from '../utils/defaultCookiePolicy.js'
 
 export const getCookiePolicy = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
@@ -76,6 +77,47 @@ export const putSection = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, { content }, 'cookie policy updated sucessfully'))
+})
+
+// "Delete" the policy — reset its content to the default seed (the same state a
+// freshly created website's policy has) and remove all of this policy's images.
+// This is a RESET, not a row-removal: cookie_policy is 1:1 with a website, seeded
+// at website create with no independent create path, so resetting keeps the
+// invariant and lets "Create new cookie policy" reopen the wizard on the default
+// template. (Deleting the website itself still hard-removes the row via the FK
+// cascade.)
+export const deleteCookiePolicy = asyncHandler(async (req, res) => {
+  await assertOwnedWebsite(req.params.websiteId, req.user.id)
+  const today = new Date().toISOString().slice(0, 10)
+  const content = defaultCookieContent(today)
+
+  const [existing] = await db
+    .select({ id: cookiePolicy.id })
+    .from(cookiePolicy)
+    .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+
+  let policyId
+  if (!existing) {
+    const [ins] = await db
+      .insert(cookiePolicy)
+      .values({ websiteId: req.params.websiteId, content })
+      .returning({ id: cookiePolicy.id })
+    policyId = ins.id
+  } else {
+    await db
+      .update(cookiePolicy)
+      .set({ content })
+      .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+    policyId = existing.id
+  }
+
+  // The default content references no images, so an empty keep-set sweeps every
+  // image belonging to this policy.
+  await sweepOrphanImages(policyId, new Set())
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { content }, 'cookie policy deleted sucessfully'))
 })
 
 // Policy-level metadata (not a section) — currently the effective date. Stored as a

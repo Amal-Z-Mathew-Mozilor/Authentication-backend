@@ -322,6 +322,38 @@ async function main() {
     const servedProtected = await fetch(BASE + imgBUrl)
     check('image kept via usedImageIds (unsaved sibling) → 200', servedProtected.status === 200, `got ${servedProtected.status}`)
 
+    // "Delete" (reset) the policy → content restored to the default seed, all of
+    // this policy's images swept, completedSections cleared.
+    const cpDelete = await apiAt('DELETE', `/pulse/websites/${wid}/cookie-policy`)
+    check('cookie policy delete (reset) → 200', cpDelete.status === 200, `got ${cpDelete.status}`)
+
+    const cpGet2 = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
+    const cpBody2 = await cpGet2.json().catch(() => ({}))
+    const reset = cpBody2?.data?.content || {}
+    check(
+      'delete restores default aboutCookies heading',
+      reset.aboutCookies?.heading === 'What are cookies?',
+      `got ${JSON.stringify(reset.aboutCookies?.heading)}`,
+    )
+    check(
+      'delete resets effectiveDate to today',
+      reset.effectiveDate === seedToday,
+      `got ${JSON.stringify(reset.effectiveDate)} want ${seedToday}`,
+    )
+    check(
+      'delete clears completedSections',
+      (reset.completedSections || []).length === 0,
+      `got ${JSON.stringify(reset.completedSections)}`,
+    )
+    const servedAfterDelete = await fetch(BASE + imgBUrl)
+    check('delete sweeps the policy images → 404', servedAfterDelete.status === 404, `got ${servedAfterDelete.status}`)
+
+    const cpDelNotOwned = await apiAt(
+      'DELETE',
+      '/pulse/websites/00000000-0000-0000-0000-000000000000/cookie-policy',
+    )
+    check('cookie policy delete of non-owned website → 404', cpDelNotOwned.status === 404, `got ${cpDelNotOwned.status}`)
+
     const wEdit = await apiAt('PUT', `/pulse/websites/${wid}`, {
       name: 'Smoke Site v2',
       url: 'https://smoke2.example.com',

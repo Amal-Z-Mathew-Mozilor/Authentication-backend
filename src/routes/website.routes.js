@@ -16,6 +16,7 @@ import {
   getCookiePolicy,
   putSection,
   putPolicyMeta,
+  deleteCookiePolicy,
 } from '../controllers/cookiePolicy.controller.js'
 import { imageUpload } from '../middlewares/upload.middleware.js'
 import { uploadImage } from '../controllers/image.controller.js'
@@ -49,6 +50,12 @@ website_route.put(
   cookieSectionValidator(),
   validation,
   putSection,
+)
+// "Delete" (reset) the whole policy back to the default seed content.
+website_route.delete(
+  '/:websiteId/cookie-policy',
+  jwtValidation,
+  deleteCookiePolicy,
 )
 
 // Image upload for a website's cookie policy (multipart; stored in Postgres bytea)
