@@ -146,6 +146,26 @@ async function main() {
     const cpGet0 = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
     check('cookie policy GET → 200 (empty ok)', cpGet0.status === 200, `got ${cpGet0.status}`)
 
+    // Website creation seeds a default cookie_policy (heading/description + today's date).
+    const seedBody = await cpGet0.json().catch(() => ({}))
+    const seed = seedBody?.data?.content || {}
+    const seedToday = new Date().toISOString().slice(0, 10)
+    check(
+      'website create seeds default aboutCookies heading',
+      seed.aboutCookies?.heading === 'What are cookies?',
+      `got ${JSON.stringify(seed.aboutCookies?.heading)}`,
+    )
+    check(
+      'website create seeds default useOfCookies + cookiePreferences headings',
+      seed.useOfCookies?.heading === 'How do we use cookies?' &&
+        seed.cookiePreferences?.heading === 'Manage cookie preferences',
+    )
+    check(
+      'website create seeds effectiveDate = today',
+      seed.effectiveDate === seedToday,
+      `got ${JSON.stringify(seed.effectiveDate)} want ${seedToday}`,
+    )
+
     const cpPut = await apiAt(
       'PUT',
       `/pulse/websites/${wid}/cookie-policy/aboutCookies`,

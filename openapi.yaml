@@ -533,7 +533,10 @@ paths:
     post:
       tags: [Websites]
       summary: Add a website
-      description: Registers a new website (name + URL) for the authenticated user.
+      description: >
+        Registers a new website (name + URL) for the authenticated user. Also seeds a
+        default `cookie_policy` row for it (default heading/description for each section
+        plus `effectiveDate` = today), in the same transaction. Response shape unchanged.
       security:
         - accessTokenCookie: []
       requestBody:

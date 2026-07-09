@@ -62,6 +62,7 @@ src/
 │   ├── mail.js                   # emailVerification / passwordResetVerification templates + sendEmail
 │   ├── resetBase.js / verifyBase.js  # allowlist validators for client-supplied email link bases
 │   ├── cookiePolicy.js           # SECTIONS allowlist, imageIdsFrom/sanitizeIds, sweepOrphanImages, assertOwnedWebsite
+│   ├── defaultCookiePolicy.js    # DEFAULT_COOKIE_SECTIONS + defaultCookieContent() — seeded into a new website's policy
 │   ├── api-response.js / api-error.js / async-handler.js
 └── db/                           # index.js (drizzle), redis.js (redis client)
 ```
@@ -74,7 +75,10 @@ All routes require the `accessToken` cookie (`jwtValidation`) and are scoped to
 `PUT /:id` (update), `DELETE /:id` (delete). The `websites` table FKs
 `users.user_id` (`onDelete: cascade`); a future cookie-policy table will FK
 `websites.id` with the same cascade. Responses reuse the shared envelopes
-(`422` validation, `404` not-found/not-owned). See `openapi.yaml`.
+(`422` validation, `404` not-found/not-owned). **`POST /` also seeds the website's
+`cookie_policy` row** with default content (all sections + `effectiveDate` = today,
+from `utils/defaultCookiePolicy.js`) in the same transaction, so the editor opens
+pre-filled. See `openapi.yaml`.
 
 ## Cookie Policy resource (`/pulse/websites/:websiteId/cookie-policy`)
 

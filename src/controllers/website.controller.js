@@ -1,9 +1,10 @@
 import db from '../db/index.js'
 import ApiError from '../utils/api-error.js'
 import ApiResponse from '../utils/api-response.js'
-import { websites } from '../models/index.js'
+import { websites, cookiePolicy } from '../models/index.js'
 import { asyncHandler } from '../utils/async-handler.js'
 import { and, eq, desc } from 'drizzle-orm'
+import { defaultCookieContent } from '../utils/defaultCookiePolicy.js'
 
 // All handlers are scoped to the authenticated user (req.user.id, set by jwtValidation).
 
@@ -26,15 +27,25 @@ export const listWebsites = asyncHandler(async (req, res) => {
 
 export const createWebsite = asyncHandler(async (req, res) => {
   const { name, url } = req.body
-  const [website] = await db
-    .insert(websites)
-    .values({ name, url, userId: req.user.id })
-    .returning({
-      id: websites.id,
-      name: websites.name,
-      url: websites.url,
-      createdAt: websites.createdAt,
-    })
+  // Effective date defaults to today (server date, ISO YYYY-MM-DD); user can edit later.
+  const today = new Date().toISOString().slice(0, 10)
+  // Create the website AND seed its cookie_policy (default content) atomically, so a new
+  // site's editor opens pre-filled instead of blank. Rolls back if either insert fails.
+  const website = await db.transaction(async (tx) => {
+    const [w] = await tx
+      .insert(websites)
+      .values({ name, url, userId: req.user.id })
+      .returning({
+        id: websites.id,
+        name: websites.name,
+        url: websites.url,
+        createdAt: websites.createdAt,
+      })
+    await tx
+      .insert(cookiePolicy)
+      .values({ websiteId: w.id, content: defaultCookieContent(today) })
+    return w
+  })
   return res
     .status(201)
     .json(new ApiResponse(201, website, 'website added sucessfully'))
