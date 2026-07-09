@@ -723,6 +723,13 @@ paths:
                   format: date
                   example: "2026-07-07"
                   description: ISO calendar date (YYYY-MM-DD).
+                usedImageIds:
+                  type: array
+                  items: { type: string, format: uuid }
+                  description: >
+                    Optional. Ids of images still referenced across all section editors.
+                    Images of this policy not in this list nor in the saved content are
+                    deleted (orphan cleanup). Missing/empty is tolerated.
       responses:
         '200':
           description: Saved; returns the full updated content.
@@ -786,6 +793,13 @@ paths:
               properties:
                 heading: { type: string, maxLength: 255, example: "How do we use cookies?" }
                 description: { type: string, maxLength: 20000 }
+                usedImageIds:
+                  type: array
+                  items: { type: string, format: uuid }
+                  description: >
+                    Optional. Ids of images still referenced across all section editors.
+                    Images of this policy not in this list nor in the saved content are
+                    deleted (orphan cleanup). Missing/empty is tolerated.
       responses:
         '200':
           description: Saved; returns the full updated content.

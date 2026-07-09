@@ -254,6 +254,39 @@ async function main() {
     )
     check('non-image upload rejected → 415', badUp.status === 415, `got ${badUp.status}`)
 
+    // Orphan-image cleanup (reconcile on save). Save a section referencing image A →
+    // A is kept; then save without it (and no usedImageIds) → A is swept.
+    await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy/aboutCookies`, {
+      heading: 'What are cookies?',
+      description: `<p>see <img src="${imgUrl}"></p>`,
+    })
+    const servedKept = await fetch(BASE + imgUrl)
+    check('image referenced in saved section is kept → 200', servedKept.status === 200, `got ${servedKept.status}`)
+
+    await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy/aboutCookies`, {
+      heading: 'What are cookies?',
+      description: '<p>image removed now</p>',
+      usedImageIds: [],
+    })
+    const servedGone = await fetch(BASE + imgUrl)
+    check('image removed from content is swept → 404', servedGone.status === 404, `got ${servedGone.status}`)
+
+    // Protection: an image not yet in saved content but reported live via usedImageIds
+    // (e.g. dropped into an unsaved sibling section) must NOT be deleted.
+    const upB = await uploadFile(
+      new Blob([Buffer.from(PNG_1x1, 'base64')], { type: 'image/png' }),
+      'b.png',
+    )
+    const imgBUrl = (await upB.json().catch(() => ({})))?.data?.url
+    const imgBId = imgBUrl.split('/').pop()
+    await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy/useOfCookies`, {
+      heading: 'How do we use cookies?',
+      description: '<p>this section has no image</p>',
+      usedImageIds: [imgBId],
+    })
+    const servedProtected = await fetch(BASE + imgBUrl)
+    check('image kept via usedImageIds (unsaved sibling) → 200', servedProtected.status === 200, `got ${servedProtected.status}`)
+
     const wEdit = await apiAt('PUT', `/pulse/websites/${wid}`, {
       name: 'Smoke Site v2',
       url: 'https://smoke2.example.com',

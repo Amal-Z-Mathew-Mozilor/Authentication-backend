@@ -1,22 +1,16 @@
 import db from '../db/index.js'
 import ApiError from '../utils/api-error.js'
 import ApiResponse from '../utils/api-response.js'
-import { websites, cookiePolicy } from '../models/index.js'
+import { cookiePolicy } from '../models/index.js'
 import { asyncHandler } from '../utils/async-handler.js'
-import { and, eq } from 'drizzle-orm'
-
-// Sections stored as sibling keys in the cookie_policy.content jsonb. Adding a new
-// section (e.g. cookie preferences) is a one-line allowlist entry — no migration.
-const SECTIONS = ['aboutCookies', 'useOfCookies', 'cookiePreferences']
-
-// Ownership: the cookie policy is reachable only through a website the user owns.
-async function assertOwnedWebsite(websiteId, userId) {
-  const [site] = await db
-    .select({ id: websites.id })
-    .from(websites)
-    .where(and(eq(websites.id, websiteId), eq(websites.userId, userId)))
-  if (!site) throw new ApiError(404, 'website not found')
-}
+import { eq } from 'drizzle-orm'
+import {
+  SECTIONS,
+  imageIdsFrom,
+  sanitizeIds,
+  sweepOrphanImages,
+  assertOwnedWebsite,
+} from '../utils/cookiePolicy.js'
 
 export const getCookiePolicy = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
@@ -40,16 +34,19 @@ export const putSection = asyncHandler(async (req, res) => {
   const sectionData = { heading, description }
 
   const [existing] = await db
-    .select({ content: cookiePolicy.content })
+    .select({ id: cookiePolicy.id, content: cookiePolicy.content })
     .from(cookiePolicy)
     .where(eq(cookiePolicy.websiteId, req.params.websiteId))
 
   let content
+  let policyId
   if (!existing) {
     content = { [section]: sectionData }
-    await db
+    const [ins] = await db
       .insert(cookiePolicy)
       .values({ websiteId: req.params.websiteId, content })
+      .returning({ id: cookiePolicy.id })
+    policyId = ins.id
   } else {
     // Merge: preserve sibling sections, upsert only this one.
     content = { ...(existing.content || {}), [section]: sectionData }
@@ -57,7 +54,15 @@ export const putSection = asyncHandler(async (req, res) => {
       .update(cookiePolicy)
       .set({ content })
       .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+    policyId = existing.id
   }
+
+  // Keep images referenced by saved content (all sections) ∪ what the client reports
+  // is still on screen across all editors; delete the rest for this policy.
+  const keep = imageIdsFrom(JSON.stringify(content))
+  for (const id of sanitizeIds(req.body.usedImageIds)) keep.add(id)
+  await sweepOrphanImages(policyId, keep)
+
   return res
     .status(200)
     .json(new ApiResponse(200, { content }, 'cookie policy updated sucessfully'))
@@ -70,23 +75,34 @@ export const putPolicyMeta = asyncHandler(async (req, res) => {
   const { effectiveDate = '' } = req.body
 
   const [existing] = await db
-    .select({ content: cookiePolicy.content })
+    .select({ id: cookiePolicy.id, content: cookiePolicy.content })
     .from(cookiePolicy)
     .where(eq(cookiePolicy.websiteId, req.params.websiteId))
 
   let content
+  let policyId
   if (!existing) {
     content = { effectiveDate }
-    await db
+    const [ins] = await db
       .insert(cookiePolicy)
       .values({ websiteId: req.params.websiteId, content })
+      .returning({ id: cookiePolicy.id })
+    policyId = ins.id
   } else {
     content = { ...(existing.content || {}), effectiveDate }
     await db
       .update(cookiePolicy)
       .set({ content })
       .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+    policyId = existing.id
   }
+
+  // Same reconcile as putSection: effectiveDate carries no image, but the merged
+  // content still holds sibling sections' images, and the client sends usedImageIds.
+  const keep = imageIdsFrom(JSON.stringify(content))
+  for (const id of sanitizeIds(req.body.usedImageIds)) keep.add(id)
+  await sweepOrphanImages(policyId, keep)
+
   return res
     .status(200)
     .json(new ApiResponse(200, { content }, 'cookie policy updated sucessfully'))

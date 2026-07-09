@@ -61,6 +61,7 @@ src/
 │   ├── password.js               # hashPassword, verifyPassword (bcrypt)
 │   ├── mail.js                   # emailVerification / passwordResetVerification templates + sendEmail
 │   ├── resetBase.js / verifyBase.js  # allowlist validators for client-supplied email link bases
+│   ├── cookiePolicy.js           # SECTIONS allowlist, imageIdsFrom/sanitizeIds, sweepOrphanImages, assertOwnedWebsite
 │   ├── api-response.js / api-error.js / async-handler.js
 └── db/                           # index.js (drizzle), redis.js (redis client)
 ```
@@ -87,7 +88,8 @@ website's owner): `GET /cookie-policy` returns the whole `content` (or `{}`);
 `PUT /cookie-policy` (base path, no `:section`) upserts policy meta (body
 `{ effectiveDate }`). Both merge so other keys are preserved. `:section` is allowlisted
 (`aboutCookies`, `useOfCookies`, `cookiePreferences`) — unknown → `404`. `description` is
-HTML from the Tiptap editor. See `openapi.yaml`.
+HTML from the Tiptap editor. Both PUTs also accept an optional `usedImageIds` array used
+to garbage-collect removed images (see Images). See `openapi.yaml`.
 
 ## Images (`policy_images`)
 
@@ -96,7 +98,16 @@ Editor image uploads are stored **in Postgres** (`bytea`), one row per image, FK
 (jwt + ownership, multer memory storage, png/jpeg + magic-byte check, **no size
 limit**; find-or-creates the policy row) → `{ data: { url: "/pulse/images/<id>" } }`.
 `GET /pulse/images/:id` streams the bytes with the stored `Content-Type` — **public**
-(unguessable UUID) so images render in the editor and on public pages. See `openapi.yaml`.
+(unguessable UUID) so images render in the editor and on public pages.
+
+**Orphan cleanup (reconcile-on-save):** upload is eager (a row is inserted the moment a
+file is picked), so removing an image from the editor would otherwise leave the row behind.
+Every cookie-policy save (`putSection` / `putPolicyMeta`) calls `sweepOrphanImages`
+(`utils/cookiePolicy.js`), deleting this policy's `policy_images` not referenced by the
+saved `content` **∪** the client-sent `usedImageIds` (image ids still on screen across all
+section editors — protects images in a sibling section not saved yet). Always scoped to the
+owned policy's `cookie_policy_id`, so `usedImageIds` can only keep rows alive, never delete
+across policies. See `cookiegenerator-plan/cookie-policy-orphan-image-cleanup.md` and `openapi.yaml`.
 
 ## Auth model
 
