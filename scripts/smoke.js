@@ -228,6 +228,26 @@ async function main() {
       `got ${JSON.stringify(smokeCompleted)}`,
     )
 
+    // Not "generated" until the explicit Generate action stamps it.
+    check(
+      'cookie policy not generated before Generate (no generatedAt)',
+      !cpBody?.data?.content?.generatedAt,
+      `got ${JSON.stringify(cpBody?.data?.content?.generatedAt)}`,
+    )
+    const cpGenerate = await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy`, {
+      effectiveDate: '2026-07-07',
+      generated: true,
+    })
+    check('cookie policy PUT (generated) → 200', cpGenerate.status === 200, `got ${cpGenerate.status}`)
+    const cpGetGen = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
+    const cpGenBody = await cpGetGen.json().catch(() => ({}))
+    check(
+      'generate stamps content.generatedAt (ISO string)',
+      typeof cpGenBody?.data?.content?.generatedAt === 'string' &&
+        !Number.isNaN(Date.parse(cpGenBody.data.content.generatedAt)),
+      `got ${JSON.stringify(cpGenBody?.data?.content?.generatedAt)}`,
+    )
+
     const cpBad = await apiAt(
       'PUT',
       `/pulse/websites/${wid}/cookie-policy/nonsense`,
@@ -339,6 +359,11 @@ async function main() {
       'delete resets effectiveDate to today',
       reset.effectiveDate === seedToday,
       `got ${JSON.stringify(reset.effectiveDate)} want ${seedToday}`,
+    )
+    check(
+      'delete clears generatedAt (policy reverts to not-generated)',
+      !reset.generatedAt,
+      `got ${JSON.stringify(reset.generatedAt)}`,
     )
     check(
       'delete clears completedSections',

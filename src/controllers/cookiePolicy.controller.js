@@ -124,7 +124,14 @@ export const deleteCookiePolicy = asyncHandler(async (req, res) => {
 // top-level key in the same content jsonb, merge-upserted so sections are preserved.
 export const putPolicyMeta = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
-  const { effectiveDate = '' } = req.body
+  const { effectiveDate = '', generated } = req.body
+
+  // Marking the policy "generated" is the explicit final step (the "Generate
+  // cookie policy" button). Stamp a server-derived timestamp — never trust a
+  // client clock — so the UI can route a returning user straight to the preview.
+  // Ordinary meta auto-saves omit `generated`, so they never set this.
+  const genStamp =
+    generated === true ? { generatedAt: new Date().toISOString() } : {}
 
   const [existing] = await db
     .select({ id: cookiePolicy.id, content: cookiePolicy.content })
@@ -134,14 +141,14 @@ export const putPolicyMeta = asyncHandler(async (req, res) => {
   let content
   let policyId
   if (!existing) {
-    content = { effectiveDate }
+    content = { effectiveDate, ...genStamp }
     const [ins] = await db
       .insert(cookiePolicy)
       .values({ websiteId: req.params.websiteId, content })
       .returning({ id: cookiePolicy.id })
     policyId = ins.id
   } else {
-    content = { ...(existing.content || {}), effectiveDate }
+    content = { ...(existing.content || {}), effectiveDate, ...genStamp }
     await db
       .update(cookiePolicy)
       .set({ content })

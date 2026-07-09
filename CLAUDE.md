@@ -85,21 +85,26 @@ pre-filled. See `openapi.yaml`.
 One `cookie_policy` row per website (1:1; `website_id` unique, FK → `websites.id`
 `onDelete: cascade`). Section content lives in a single **jsonb `content`** column,
 keyed by section — currently `{ aboutCookies: {…}, useOfCookies: {…}, cookiePreferences: { heading, description } }`
-plus policy-level keys: scalar `effectiveDate` (ISO `YYYY-MM-DD`) and `completedSections`
+plus policy-level keys: scalar `effectiveDate` (ISO `YYYY-MM-DD`), `completedSections`
 (array of section keys, **server-derived** — `putSection` auto-adds the saved section,
-deduped; never read from the request body; the editor's progress tracking / future
-Generate gate). More sections add sibling keys with no migration. Routes (nested, behind
+deduped; never read from the request body; the editor's progress tracking), and
+`generatedAt` (ISO timestamp, **server-derived** — set only when the "Generate cookie
+policy" action sends `generated: true`; its presence is the "already generated" gate the
+frontend reads to route a returning user to the read-only preview instead of the wizard).
+More sections add sibling keys with no migration. Routes (nested, behind
 `jwtValidation`, ownership verified via the
 website's owner): `GET /cookie-policy` returns the whole `content` (or `{}`);
 `PUT /cookie-policy/:section` upserts one section (body `{ heading, description }`);
 `PUT /cookie-policy` (base path, no `:section`) upserts policy meta (body
-`{ effectiveDate }`). Both merge so other keys are preserved. `:section` is allowlisted
+`{ effectiveDate }`, plus optional `generated: true` → stamps `generatedAt` = now). Both
+merge so other keys are preserved. `:section` is allowlisted
 (`aboutCookies`, `useOfCookies`, `cookiePreferences`) — unknown → `404`. `description` is
 HTML from the Tiptap editor. Both PUTs also accept an optional `usedImageIds` array used
 to garbage-collect removed images (see Images). `DELETE /cookie-policy` (base path)
 **resets** the policy — it overwrites `content` with the default seed
 (`defaultCookieContent(today)`, i.e. the fresh-website state: 3 default sections +
-`effectiveDate` = today, no `completedSections`) and sweeps all of this policy's images.
+`effectiveDate` = today, no `completedSections`, no `generatedAt`) and sweeps all of this
+policy's images.
 It is a **reset, not a row removal** (the `cookie_policy` row is 1:1, seeded at website
 create with no independent create path, so resetting keeps the invariant and lets the UI
 reopen the wizard on the default template); only deleting the website drops the row (FK
