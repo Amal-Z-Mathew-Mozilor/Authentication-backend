@@ -38,10 +38,16 @@ export const putSection = asyncHandler(async (req, res) => {
     .from(cookiePolicy)
     .where(eq(cookiePolicy.websiteId, req.params.websiteId))
 
+  // A section counts as completed once it has been saved — server-derived (never
+  // client-sent), persisted in the same jsonb so progress survives reload/resume.
+  const completedSections = [
+    ...new Set([...(existing?.content?.completedSections || []), section]),
+  ]
+
   let content
   let policyId
   if (!existing) {
-    content = { [section]: sectionData }
+    content = { [section]: sectionData, completedSections }
     const [ins] = await db
       .insert(cookiePolicy)
       .values({ websiteId: req.params.websiteId, content })
@@ -49,7 +55,11 @@ export const putSection = asyncHandler(async (req, res) => {
     policyId = ins.id
   } else {
     // Merge: preserve sibling sections, upsert only this one.
-    content = { ...(existing.content || {}), [section]: sectionData }
+    content = {
+      ...(existing.content || {}),
+      [section]: sectionData,
+      completedSections,
+    }
     await db
       .update(cookiePolicy)
       .set({ content })

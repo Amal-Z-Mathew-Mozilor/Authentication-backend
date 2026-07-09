@@ -165,6 +165,12 @@ async function main() {
       seed.effectiveDate === seedToday,
       `got ${JSON.stringify(seed.effectiveDate)} want ${seedToday}`,
     )
+    // Progress tracking: defaults are seeded but nothing is user-saved yet.
+    check(
+      'fresh policy has no completedSections',
+      (seed.completedSections || []).length === 0,
+      `got ${JSON.stringify(seed.completedSections)}`,
+    )
 
     const cpPut = await apiAt(
       'PUT',
@@ -211,6 +217,15 @@ async function main() {
     check(
       'cookie policy persisted effectiveDate (meta coexists with sections)',
       cpBody?.data?.content?.effectiveDate === '2026-07-07',
+    )
+    // Each section PUT auto-marks completion (deduped, survives the meta PUT + re-GET).
+    const smokeCompleted = cpBody?.data?.content?.completedSections || []
+    check(
+      'completedSections contains all 3 saved sections',
+      ['aboutCookies', 'useOfCookies', 'cookiePreferences'].every((k) =>
+        smokeCompleted.includes(k),
+      ) && smokeCompleted.length === 3,
+      `got ${JSON.stringify(smokeCompleted)}`,
     )
 
     const cpBad = await apiAt(

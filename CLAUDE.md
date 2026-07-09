@@ -85,8 +85,11 @@ pre-filled. See `openapi.yaml`.
 One `cookie_policy` row per website (1:1; `website_id` unique, FK → `websites.id`
 `onDelete: cascade`). Section content lives in a single **jsonb `content`** column,
 keyed by section — currently `{ aboutCookies: {…}, useOfCookies: {…}, cookiePreferences: { heading, description } }`
-plus a policy-level scalar `effectiveDate` (ISO `YYYY-MM-DD`); more sections add sibling
-keys with no migration. Routes (nested, behind `jwtValidation`, ownership verified via the
+plus policy-level keys: scalar `effectiveDate` (ISO `YYYY-MM-DD`) and `completedSections`
+(array of section keys, **server-derived** — `putSection` auto-adds the saved section,
+deduped; never read from the request body; the editor's progress tracking / future
+Generate gate). More sections add sibling keys with no migration. Routes (nested, behind
+`jwtValidation`, ownership verified via the
 website's owner): `GET /cookie-policy` returns the whole `content` (or `{}`);
 `PUT /cookie-policy/:section` upserts one section (body `{ heading, description }`);
 `PUT /cookie-policy` (base path, no `:section`) upserts policy meta (body

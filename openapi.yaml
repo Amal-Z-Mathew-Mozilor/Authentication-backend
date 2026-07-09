@@ -686,7 +686,7 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example:
                 statuscode: 200
-                data: { content: { aboutCookies: { heading: "What are cookies?", description: "This Cookie Policy explains…" }, useOfCookies: { heading: "How do we use cookies?", description: "Like most online services…" }, cookiePreferences: { heading: "Manage cookie preferences", description: "You can modify your cookie settings…" }, effectiveDate: "2026-07-07" } }
+                data: { content: { aboutCookies: { heading: "What are cookies?", description: "This Cookie Policy explains…" }, useOfCookies: { heading: "How do we use cookies?", description: "Like most online services…" }, cookiePreferences: { heading: "Manage cookie preferences", description: "You can modify your cookie settings…" }, effectiveDate: "2026-07-07", completedSections: [aboutCookies, useOfCookies] } }
                 message: "cookie policy fetched sucessfully"
                 sucess: true
         '401':
@@ -784,7 +784,9 @@ paths:
       description: >
         Upserts one section (`aboutCookies` or `useOfCookies`) of the website's cookie
         policy, keyed by the `section` path param. Sibling sections are preserved.
-        An unknown section returns `404`.
+        An unknown section returns `404`. A successfully saved section is also
+        auto-marked in `content.completedSections` (server-derived, deduped — used
+        by the editor's progress bar; never read from the request body).
       security:
         - accessTokenCookie: []
       requestBody:
@@ -811,7 +813,7 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example:
                 statuscode: 200
-                data: { content: { aboutCookies: { heading: "What are cookies?", description: "…" }, useOfCookies: { heading: "How do we use cookies?", description: "…" } } }
+                data: { content: { aboutCookies: { heading: "What are cookies?", description: "…" }, useOfCookies: { heading: "How do we use cookies?", description: "…" }, completedSections: [aboutCookies, useOfCookies] } }
                 message: "cookie policy updated sucessfully"
                 sucess: true
         '401':
