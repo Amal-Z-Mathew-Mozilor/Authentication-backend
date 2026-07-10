@@ -142,6 +142,41 @@ async function main() {
       `got ${wList.status}`,
     )
 
+    // Duplicate prevention: name and url must each be unique per user.
+    const dupName = await apiAt('POST', '/pulse/websites', {
+      name: 'Smoke Site', // same name as wid
+      url: 'https://unique-1.example.com',
+    })
+    check('website duplicate name → 422', dupName.status === 422, `got ${dupName.status}`)
+    const dupUrl = await apiAt('POST', '/pulse/websites', {
+      name: 'Totally Different Name',
+      url: 'https://smoke.example.com/', // same url as wid (trailing slash ignored)
+    })
+    check('website duplicate url → 422', dupUrl.status === 422, `got ${dupUrl.status}`)
+
+    // A genuinely unique name+url still creates.
+    const created2 = await apiAt('POST', '/pulse/websites', {
+      name: 'Smoke Site 2',
+      url: 'https://smoke2.example.com',
+    })
+    check('website unique create → 201', created2.status === 201, `got ${created2.status}`)
+    const wid2 = (await created2.json().catch(() => ({})))?.data?.id
+
+    // Editing wid2 to collide with wid's name → 422.
+    const editCollide = await apiAt('PUT', `/pulse/websites/${wid2}`, {
+      name: 'Smoke Site',
+      url: 'https://smoke2.example.com',
+    })
+    check('website edit collides with another name → 422', editCollide.status === 422, `got ${editCollide.status}`)
+    // Editing wid2 to its OWN unchanged name+url → 200 (self excluded).
+    const editSelf = await apiAt('PUT', `/pulse/websites/${wid2}`, {
+      name: 'Smoke Site 2',
+      url: 'https://smoke2.example.com',
+    })
+    check('website edit to own values (self-exclusion) → 200', editSelf.status === 200, `got ${editSelf.status}`)
+    // Clean up wid2 so it can't collide with the later edit-of-wid test.
+    await apiAt('DELETE', `/pulse/websites/${wid2}`)
+
     // Cookie policy (About cookies) for the created website
     const cpGet0 = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
     check('cookie policy GET → 200 (empty ok)', cpGet0.status === 200, `got ${cpGet0.status}`)

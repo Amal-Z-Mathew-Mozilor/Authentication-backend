@@ -76,7 +76,12 @@ All routes require the `accessToken` cookie (`jwtValidation`) and are scoped to
 `PUT /:id` (update), `DELETE /:id` (delete). The `websites` table FKs
 `users.user_id` (`onDelete: cascade`); a future cookie-policy table will FK
 `websites.id` with the same cascade. Responses reuse the shared envelopes
-(`422` validation, `404` not-found/not-owned). **`POST /` also seeds the website's
+(`422` validation, `404` not-found/not-owned). **Name and URL must each be unique per
+user** — `createWebsite`/`updateWebsite` call `assertNoDuplicate` (normalized compare:
+trim + lowercase, url also trailing-slash-insensitive; update excludes the edited row) and
+throw `422` with `errors:[{path:'name'|'url', msg}]` on a collision (rendered inline by the
+client). This is an **app-level check** (query-then-write) — no DB unique index yet
+(existing duplicate rows would fail the migration; deferred pending dedup). **`POST /` also seeds the website's
 `cookie_policy` row** with default content (all sections + `effectiveDate` = today,
 from `utils/defaultCookiePolicy.js`) in the same transaction, so the editor opens
 pre-filled. See `openapi.yaml`.
