@@ -17,6 +17,21 @@ export const cookieSectionValidator = () => {
   ]
 }
 
+// "Send code to a teammate" — recipient email is required and must be valid. Mirrors the
+// email chain in user.validator.js (.bail() so an empty field shows only "is required").
+export const sendCodeValidator = () => {
+  return [
+    body('email')
+      .trim()
+      .notEmpty()
+      .withMessage('Email is required')
+      .bail()
+      .isEmail()
+      .withMessage('Invalid email address')
+      .normalizeEmail(),
+  ]
+}
+
 // Policy-level effective date — optional; when present must be an ISO calendar date
 // (YYYY-MM-DD). The shape check bails first so a bad format shows one clear message.
 export const effectiveDateValidator = () => {

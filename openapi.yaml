@@ -868,6 +868,69 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               example: { success: false, message: "website not found", errors: [] }
+  /pulse/websites/{websiteId}/cookie-policy/send-code:
+    parameters:
+      - name: websiteId
+        in: path
+        required: true
+        description: The website id (uuid).
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Cookie Policy]
+      summary: Email the cookie policy install code to a teammate
+      description: >
+        Generates the same self-contained HTML snippet as `GET …/cookie-policy/html`
+        and emails it to the given address in a Pulse-branded template (title, "Add as
+        HTML" instructions, the escaped snippet in a code box). Uses the server's
+        nodemailer transport; mail-transport errors are swallowed (logged, not thrown),
+        so a mail outage still returns `200` once dispatch is attempted.
+      security:
+        - accessTokenCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "teammate@example.com"
+                  description: Recipient address. Required; must be a valid email.
+      responses:
+        '200':
+          description: The email was dispatched.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example:
+                statuscode: 200
+                data: {}
+                message: "installation code sent sucessfully"
+                sucess: true
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Website not found (or not owned by the user).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "website not found", errors: [] }
+        '422':
+          description: Validation failed (missing or invalid email).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationErrorResponse' }
   /pulse/websites/{websiteId}/cookie-policy/{section}:
     parameters:
       - name: websiteId

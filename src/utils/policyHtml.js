@@ -45,7 +45,8 @@ const hasText = (html) =>
 
 // Escape text-context values (headings, url). Descriptions are the owner's own Tiptap
 // HTML and are intentionally left as-is (same trust boundary as the app's editor).
-const escapeHtml = (s) =>
+// Exported so the teammate email can render the snippet as visible (non-executing) code.
+export const escapeHtml = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 // Compose the snippet. `imagesById` maps a lowercased image uuid → its data: URI; any

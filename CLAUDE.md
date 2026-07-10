@@ -39,7 +39,7 @@ src/
 ├── controllers/auth.controller.js   # signup, verifyMail, login, logout, forgot/reset, rotateToken,
 │                                     # changePassword, me, resendVerification, resetResend
 ├── controllers/website.controller.js # listWebsites, createWebsite, updateWebsite, deleteWebsite (user-scoped)
-├── controllers/cookiePolicy.controller.js # getCookiePolicy, getCookiePolicyHtml (self-contained HTML export), putSection (per-section jsonb upsert), putPolicyMeta (effectiveDate); ownership-checked
+├── controllers/cookiePolicy.controller.js # getCookiePolicy, getCookiePolicyHtml (self-contained HTML export), sendPolicyCode (email the HTML to a teammate), putSection (per-section jsonb upsert), putPolicyMeta (effectiveDate); ownership-checked
 ├── controllers/image.controller.js  # uploadImage (multer→Postgres bytea), getImage (streams bytes)
 ├── routes/image.routes.js       # GET /pulse/images/:id — public image serve
 ├── middlewares/upload.middleware.js  # multer memory storage, png/jpeg filter (imageUpload)
@@ -99,6 +99,9 @@ website's owner): `GET /cookie-policy` returns the whole `content` (or `{}`);
 **self-contained HTML snippet** (styles + heading + dates + non-empty sections + footer,
 Start/End markers) for the "HTML format" add-to-site export, with every `/pulse/images/:id`
 reference **inlined as a base64 `data:` URI** so it renders on any host (see `utils/policyHtml.js`);
+`POST /cookie-policy/send-code` (body `{ email }`, validated) emails that same snippet to a
+teammate in a Pulse-branded template (`policyInstallEmail` in `utils/mail.js`, via the raw-html
+`sendEmail` path) — mail-transport errors are swallowed so a mail outage still returns `200`;
 `PUT /cookie-policy/:section` upserts one section (body `{ heading, description }`);
 `PUT /cookie-policy` (base path, no `:section`) upserts policy meta (body
 `{ effectiveDate }`, plus optional `generated: true` → stamps `generatedAt` = now). Both

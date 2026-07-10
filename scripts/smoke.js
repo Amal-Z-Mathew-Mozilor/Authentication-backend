@@ -266,6 +266,20 @@ async function main() {
     )
     check('HTML export of non-owned website → 404', htmlNotOwned.status === 404, `got ${htmlNotOwned.status}`)
 
+    // Send code to a teammate — validation + ownership only (NO live send, so no real
+    // email is dispatched from the smoke run).
+    const sendBadEmail = await apiAt('POST', `/pulse/websites/${wid}/cookie-policy/send-code`, {
+      email: 'not-an-email',
+    })
+    check('send-code invalid email → 422', sendBadEmail.status === 422, `got ${sendBadEmail.status}`)
+    // Valid email but non-owned website → passes validation, fails ownership before any send.
+    const sendNotOwned = await apiAt(
+      'POST',
+      '/pulse/websites/00000000-0000-0000-0000-000000000000/cookie-policy/send-code',
+      { email: 'teammate@example.com' },
+    )
+    check('send-code of non-owned website → 404', sendNotOwned.status === 404, `got ${sendNotOwned.status}`)
+
     const cpBad = await apiAt(
       'PUT',
       `/pulse/websites/${wid}/cookie-policy/nonsense`,

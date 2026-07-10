@@ -11,10 +11,12 @@ import {
 import {
   cookieSectionValidator,
   effectiveDateValidator,
+  sendCodeValidator,
 } from '../validators/cookiePolicy.validator.js'
 import {
   getCookiePolicy,
   getCookiePolicyHtml,
+  sendPolicyCode,
   putSection,
   putPolicyMeta,
   deleteCookiePolicy,
@@ -43,6 +45,14 @@ website_route.get(
   '/:websiteId/cookie-policy/html',
   jwtValidation,
   getCookiePolicyHtml,
+)
+// Email that HTML snippet to a teammate ("Send code to a teammate").
+website_route.post(
+  '/:websiteId/cookie-policy/send-code',
+  jwtValidation,
+  sendCodeValidator(),
+  validation,
+  sendPolicyCode,
 )
 website_route.put(
   '/:websiteId/cookie-policy',
