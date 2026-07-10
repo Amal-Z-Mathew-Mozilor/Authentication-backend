@@ -41,7 +41,7 @@ src/
 ├── controllers/website.controller.js # listWebsites, createWebsite, updateWebsite, deleteWebsite (user-scoped)
 ├── controllers/cookiePolicy.controller.js # getCookiePolicy, getCookiePolicyHtml (self-contained HTML export), sendPolicyCode (email the HTML to a teammate), putSection (per-section jsonb upsert), putPolicyMeta (effectiveDate); ownership-checked
 ├── controllers/image.controller.js  # uploadImage (multer→Postgres bytea), getImage (streams bytes)
-├── routes/image.routes.js       # GET /pulse/images/:id — public image serve
+├── routes/image.routes.js       # GET /pulse/images/:id — auth'd, owner-scoped image serve
 ├── middlewares/upload.middleware.js  # multer memory storage, png/jpeg filter (imageUpload)
 ├── middlewares/
 │   ├── auth.middleware.js        # validation() — turns express-validator errors into 422
@@ -132,8 +132,13 @@ Editor image uploads are stored **in Postgres** (`bytea`), one row per image, FK
 `cookie_policy.id` (`onDelete: cascade`). `POST /pulse/websites/:websiteId/images`
 (jwt + ownership, multer memory storage, png/jpeg + magic-byte check, **no size
 limit**; find-or-creates the policy row) → `{ data: { url: "/pulse/images/<id>" } }`.
-`GET /pulse/images/:id` streams the bytes with the stored `Content-Type` — **public**
-(unguessable UUID) so images render in the editor and on public pages.
+`GET /pulse/images/:id` streams the bytes with the stored `Content-Type` — **authenticated
+(`jwtValidation`) and owner-scoped**: `getImage` joins `policy_images → cookie_policy →
+websites` and requires `websites.userId === req.user.id`, so a non-existent **or**
+not-owned id both return `404` (ids aren't enumerable). Served `Cache-Control: private`.
+The editor/preview `<img>` requests carry the `accessToken` cookie automatically
+(same-site); the HTML export inlines base64 server-side, so pasted policy pages never hit
+this route.
 
 **Orphan cleanup (reconcile-on-save):** upload is eager (a row is inserted the moment a
 file is picked), so removing an image from the editor would otherwise leave the row behind.

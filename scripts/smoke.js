@@ -377,6 +377,15 @@ async function main() {
         body: fd,
       })
     }
+    // Image serve is now authenticated + owner-scoped — send the cookie jar.
+    function getImg(url) {
+      const headers = {}
+      const ck = Object.entries(jar)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('; ')
+      if (ck) headers.Cookie = ck
+      return fetch(BASE + url, { headers })
+    }
     const PNG_1x1 =
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
     const up = await uploadFile(
@@ -391,13 +400,49 @@ async function main() {
       !!imgUrl && imgUrl.startsWith('/pulse/images/'),
     )
 
-    const imgRes = await fetch(BASE + imgUrl)
+    const imgRes = await getImg(imgUrl)
     check(
-      'image serve → 200 image/png',
+      'image serve (authed owner) → 200 image/png',
       imgRes.status === 200 &&
         (imgRes.headers.get('content-type') || '').includes('image/png'),
       `got ${imgRes.status}`,
     )
+
+    // No auth cookie → 401 (route is no longer public).
+    const imgNoAuth = await fetch(BASE + imgUrl)
+    check('image serve without auth → 401', imgNoAuth.status === 401, `got ${imgNoAuth.status}`)
+
+    // Cross-user: a different logged-in user cannot read this user's image → 404.
+    const otherEmail = `smoke_other_${Date.now()}@example.com`
+    await db.insert(users).values({
+      email: otherEmail,
+      password: await hashPassword(password),
+      isVerified: true,
+    })
+    try {
+      const otherJar = {}
+      const oLogin = await fetch(`${BASE}${PREFIX}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: otherEmail, password }),
+      })
+      for (const c of oLogin.headers.getSetCookie?.() ?? []) {
+        const pair = c.split(';')[0]
+        const i = pair.indexOf('=')
+        const k = pair.slice(0, i).trim()
+        const v = pair.slice(i + 1).trim()
+        if (v) otherJar[k] = v
+      }
+      const ock = Object.entries(otherJar)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('; ')
+      const crossRes = await fetch(BASE + imgUrl, {
+        headers: ock ? { Cookie: ock } : {},
+      })
+      check("another user's image → 404", crossRes.status === 404, `got ${crossRes.status}`)
+    } finally {
+      await db.delete(users).where(eq(users.email, otherEmail))
+    }
 
     const badUp = await uploadFile(
       new Blob(['not an image'], { type: 'text/plain' }),
@@ -411,7 +456,7 @@ async function main() {
       heading: 'What are cookies?',
       description: `<p>see <img src="${imgUrl}"></p>`,
     })
-    const servedKept = await fetch(BASE + imgUrl)
+    const servedKept = await getImg(imgUrl)
     check('image referenced in saved section is kept → 200', servedKept.status === 200, `got ${servedKept.status}`)
 
     // HTML export inlines the referenced image as a base64 data URI (portable snippet).
@@ -427,7 +472,7 @@ async function main() {
       description: '<p>image removed now</p>',
       usedImageIds: [],
     })
-    const servedGone = await fetch(BASE + imgUrl)
+    const servedGone = await getImg(imgUrl)
     check('image removed from content is swept → 404', servedGone.status === 404, `got ${servedGone.status}`)
 
     // Protection: an image not yet in saved content but reported live via usedImageIds
@@ -443,7 +488,7 @@ async function main() {
       description: '<p>this section has no image</p>',
       usedImageIds: [imgBId],
     })
-    const servedProtected = await fetch(BASE + imgBUrl)
+    const servedProtected = await getImg(imgBUrl)
     check('image kept via usedImageIds (unsaved sibling) → 200', servedProtected.status === 200, `got ${servedProtected.status}`)
 
     // "Delete" (reset) the policy → content restored to the default seed, all of
@@ -474,7 +519,7 @@ async function main() {
       (reset.completedSections || []).length === 0,
       `got ${JSON.stringify(reset.completedSections)}`,
     )
-    const servedAfterDelete = await fetch(BASE + imgBUrl)
+    const servedAfterDelete = await getImg(imgBUrl)
     check('delete sweeps the policy images → 404', servedAfterDelete.status === 404, `got ${servedAfterDelete.status}`)
 
     const cpDelNotOwned = await apiAt(

@@ -71,15 +71,23 @@ export const uploadImage = asyncHandler(async (req, res) => {
     )
 })
 
+// Owner-scoped read: the image must belong to one of the caller's cookie policies
+// (policy_images → cookie_policy → websites → userId). A non-existent id OR another
+// user's image both return 404 (don't leak which ids exist). jwtValidation sets req.user.
 export const getImage = asyncHandler(async (req, res) => {
   if (!UUID_RE.test(req.params.id)) throw new ApiError(404, 'image not found')
   const [img] = await db
     .select({ mime: policyImages.mime, data: policyImages.data })
     .from(policyImages)
-    .where(eq(policyImages.id, req.params.id))
+    .innerJoin(cookiePolicy, eq(policyImages.cookiePolicyId, cookiePolicy.id))
+    .innerJoin(websites, eq(cookiePolicy.websiteId, websites.id))
+    .where(
+      and(eq(policyImages.id, req.params.id), eq(websites.userId, req.user.id)),
+    )
   if (!img) throw new ApiError(404, 'image not found')
 
   res.set('Content-Type', img.mime)
-  res.set('Cache-Control', 'public, max-age=31536000, immutable')
+  // Private: the response is user-scoped, so shared/CDN caches must not reuse it.
+  res.set('Cache-Control', 'private, max-age=31536000, immutable')
   return res.send(img.data)
 })
