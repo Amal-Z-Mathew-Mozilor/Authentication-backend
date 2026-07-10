@@ -39,7 +39,7 @@ src/
 ├── controllers/auth.controller.js   # signup, verifyMail, login, logout, forgot/reset, rotateToken,
 │                                     # changePassword, me, resendVerification, resetResend
 ├── controllers/website.controller.js # listWebsites, createWebsite, updateWebsite, deleteWebsite (user-scoped)
-├── controllers/cookiePolicy.controller.js # getCookiePolicy, putSection (per-section jsonb upsert), putPolicyMeta (effectiveDate); ownership-checked
+├── controllers/cookiePolicy.controller.js # getCookiePolicy, getCookiePolicyHtml (self-contained HTML export), putSection (per-section jsonb upsert), putPolicyMeta (effectiveDate); ownership-checked
 ├── controllers/image.controller.js  # uploadImage (multer→Postgres bytea), getImage (streams bytes)
 ├── routes/image.routes.js       # GET /pulse/images/:id — public image serve
 ├── middlewares/upload.middleware.js  # multer memory storage, png/jpeg filter (imageUpload)
@@ -63,6 +63,7 @@ src/
 │   ├── resetBase.js / verifyBase.js  # allowlist validators for client-supplied email link bases
 │   ├── cookiePolicy.js           # SECTIONS allowlist, imageIdsFrom/sanitizeIds, sweepOrphanImages, assertOwnedWebsite
 │   ├── defaultCookiePolicy.js    # DEFAULT_COOKIE_SECTIONS + defaultCookieContent() — seeded into a new website's policy
+│   ├── policyHtml.js             # renderPolicyHtml() + helpers — the saved policy as a self-contained HTML snippet (the "HTML format" export)
 │   ├── api-response.js / api-error.js / async-handler.js
 └── db/                           # index.js (drizzle), redis.js (redis client)
 ```
@@ -94,6 +95,10 @@ frontend reads to route a returning user to the read-only preview instead of the
 More sections add sibling keys with no migration. Routes (nested, behind
 `jwtValidation`, ownership verified via the
 website's owner): `GET /cookie-policy` returns the whole `content` (or `{}`);
+`GET /cookie-policy/html` returns `{ html }` — the saved policy rendered as a
+**self-contained HTML snippet** (styles + heading + dates + non-empty sections + footer,
+Start/End markers) for the "HTML format" add-to-site export, with every `/pulse/images/:id`
+reference **inlined as a base64 `data:` URI** so it renders on any host (see `utils/policyHtml.js`);
 `PUT /cookie-policy/:section` upserts one section (body `{ heading, description }`);
 `PUT /cookie-policy` (base path, no `:section`) upserts policy meta (body
 `{ effectiveDate }`, plus optional `generated: true` → stamps `generatedAt` = now). Both

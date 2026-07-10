@@ -821,6 +821,53 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               example: { success: false, message: "website not found", errors: [] }
+  /pulse/websites/{websiteId}/cookie-policy/html:
+    parameters:
+      - name: websiteId
+        in: path
+        required: true
+        description: The website id (uuid).
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Cookie Policy]
+      summary: Export the cookie policy as self-contained HTML
+      description: >
+        Renders the SAVED cookie policy as a single self-contained HTML snippet the
+        owner can paste onto their own site (the "HTML format" add-to-site option).
+        Mirrors the on-screen preview: a light `<style>`, `<h1>Cookie Policy</h1>`, the
+        effective/last-updated dates, each non-empty section's heading + rich-text body,
+        and a footer, wrapped in `<!-- Start/End Pulse cookie policy -->` markers. Every
+        `/pulse/images/{id}` reference is inlined as a base64 `data:` URI so the snippet
+        renders anywhere (a referenced-but-missing image is left as its original URL).
+      security:
+        - accessTokenCookie: []
+      responses:
+        '200':
+          description: The generated HTML snippet.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example:
+                statuscode: 200
+                data: { html: "<!-- Start Pulse cookie policy -->\n<style>.cookie-policy-p img{max-width:100%;height:auto}</style>\n<h1 class=\"cookie-policy-h1\">Cookie Policy</h1>\n<div class=\"cookie-policy-date-container\"><p>Effective date: July 10, 2026</p><p>Last updated: July 10, 2026</p></div>\n&nbsp;\n<h2>What are cookies?</h2>\n<div class=\"cookie-policy-p\"><p>This Cookie Policy explains…</p></div>\n&nbsp;\n<p class=\"cookie-policy-p\">Cookie Policy generated for <span>https://example.com</span></p>\n<!-- End Pulse cookie policy -->" }
+                message: "cookie policy html generated sucessfully"
+                sucess: true
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Website not found (or not owned by the user).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example: { success: false, message: "website not found", errors: [] }
   /pulse/websites/{websiteId}/cookie-policy/{section}:
     parameters:
       - name: websiteId

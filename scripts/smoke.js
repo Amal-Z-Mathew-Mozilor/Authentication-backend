@@ -248,6 +248,24 @@ async function main() {
       `got ${JSON.stringify(cpGenBody?.data?.content?.generatedAt)}`,
     )
 
+    // HTML export ("HTML format" add-to-site option) — self-contained snippet.
+    const htmlRes = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy/html`)
+    const htmlBody = await htmlRes.json().catch(() => ({}))
+    const exportHtml = htmlBody?.data?.html
+    check('cookie policy HTML export → 200', htmlRes.status === 200, `got ${htmlRes.status}`)
+    check(
+      'HTML export has policy h1 + a saved section heading + footer',
+      typeof exportHtml === 'string' &&
+        exportHtml.includes('<h1 class="cookie-policy-h1">Cookie Policy') &&
+        exportHtml.includes('What are cookies?') &&
+        exportHtml.includes('Cookie Policy generated for'),
+    )
+    const htmlNotOwned = await apiAt(
+      'GET',
+      '/pulse/websites/00000000-0000-0000-0000-000000000000/cookie-policy/html',
+    )
+    check('HTML export of non-owned website → 404', htmlNotOwned.status === 404, `got ${htmlNotOwned.status}`)
+
     const cpBad = await apiAt(
       'PUT',
       `/pulse/websites/${wid}/cookie-policy/nonsense`,
@@ -317,6 +335,14 @@ async function main() {
     })
     const servedKept = await fetch(BASE + imgUrl)
     check('image referenced in saved section is kept → 200', servedKept.status === 200, `got ${servedKept.status}`)
+
+    // HTML export inlines the referenced image as a base64 data URI (portable snippet).
+    const htmlWithImg = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy/html`)
+    const inlined = (await htmlWithImg.json().catch(() => ({})))?.data?.html || ''
+    check(
+      'HTML export inlines image as base64 (no /pulse/images url left)',
+      inlined.includes('data:image/png;base64,') && !inlined.includes(imgUrl),
+    )
 
     await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy/aboutCookies`, {
       heading: 'What are cookies?',

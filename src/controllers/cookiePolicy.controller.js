@@ -1,9 +1,9 @@
 import db from '../db/index.js'
 import ApiError from '../utils/api-error.js'
 import ApiResponse from '../utils/api-response.js'
-import { cookiePolicy } from '../models/index.js'
+import { cookiePolicy, websites, policyImages } from '../models/index.js'
 import { asyncHandler } from '../utils/async-handler.js'
-import { eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import {
   SECTIONS,
   imageIdsFrom,
@@ -12,6 +12,7 @@ import {
   assertOwnedWebsite,
 } from '../utils/cookiePolicy.js'
 import { defaultCookieContent } from '../utils/defaultCookiePolicy.js'
+import { renderPolicyHtml } from '../utils/policyHtml.js'
 
 export const getCookiePolicy = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
@@ -23,6 +24,54 @@ export const getCookiePolicy = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, { content }, 'cookie policy fetched sucessfully'))
+})
+
+// The "HTML format" export: render the SAVED policy as a self-contained HTML snippet
+// (styles + heading + dates + sections + footer) the owner pastes onto their own site.
+// Every referenced /pulse/images/<id> is inlined as a base64 data URI so the snippet is
+// portable (the /pulse/images URL wouldn't resolve on a foreign host). Owner-scoped.
+export const getCookiePolicyHtml = asyncHandler(async (req, res) => {
+  await assertOwnedWebsite(req.params.websiteId, req.user.id)
+
+  // Website url — used in the footer ("Cookie Policy generated for <url>").
+  const [site] = await db
+    .select({ url: websites.url })
+    .from(websites)
+    .where(eq(websites.id, req.params.websiteId))
+
+  const [row] = await db
+    .select({ id: cookiePolicy.id, content: cookiePolicy.content })
+    .from(cookiePolicy)
+    .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+  const content = row?.content || {}
+
+  // Batch-load only the images actually referenced by the saved content, scoped to this
+  // policy, and build id → data:URI. Buffer bytes (bytea) → base64.
+  const imagesById = {}
+  const ids = [...imageIdsFrom(JSON.stringify(content))]
+  if (row?.id && ids.length) {
+    const imgs = await db
+      .select({
+        id: policyImages.id,
+        mime: policyImages.mime,
+        data: policyImages.data,
+      })
+      .from(policyImages)
+      .where(
+        and(
+          eq(policyImages.cookiePolicyId, row.id),
+          inArray(policyImages.id, ids),
+        ),
+      )
+    for (const img of imgs)
+      imagesById[img.id.toLowerCase()] =
+        `data:${img.mime};base64,${img.data.toString('base64')}`
+  }
+
+  const html = renderPolicyHtml({ content, url: site?.url || '', imagesById })
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { html }, 'cookie policy html generated sucessfully'))
 })
 
 export const putSection = asyncHandler(async (req, res) => {

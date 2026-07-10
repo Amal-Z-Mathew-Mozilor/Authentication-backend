@@ -14,6 +14,7 @@ import {
 } from '../validators/cookiePolicy.validator.js'
 import {
   getCookiePolicy,
+  getCookiePolicyHtml,
   putSection,
   putPolicyMeta,
   deleteCookiePolicy,
@@ -37,6 +38,12 @@ website_route.delete('/:id', jwtValidation, deleteWebsite)
 // (effectiveDate); PUT /:section upserts one section
 // (:section ∈ aboutCookies|useOfCookies|cookiePreferences). Distinct paths — no collision.
 website_route.get('/:websiteId/cookie-policy', jwtValidation, getCookiePolicy)
+// Self-contained HTML export of the saved policy (the "HTML format" add-to-site option).
+website_route.get(
+  '/:websiteId/cookie-policy/html',
+  jwtValidation,
+  getCookiePolicyHtml,
+)
 website_route.put(
   '/:websiteId/cookie-policy',
   jwtValidation,
