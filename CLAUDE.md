@@ -12,6 +12,8 @@ client lives in a separate repo (`../frontend`).
   per-user `iat` cutoff (`session:iat:<userId>` — see Login protection / `AI_DOCS/session_iat_invalidation.md`).
 - **JWT** (`jsonwebtoken`) access + refresh tokens; **bcrypt** for password hashing.
 - **express-validator** for input validation; **nodemailer** + **mailgen** for emails.
+- **Amazon S3** (`@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`, `uuid`) — cookie-policy
+  image storage (private bucket; presigned-URL reads). See Images.
 
 ## Commands
 
@@ -40,7 +42,7 @@ src/
 │                                     # changePassword, me, resendVerification, resetResend
 ├── controllers/website.controller.js # listWebsites, createWebsite, updateWebsite, deleteWebsite (user-scoped)
 ├── controllers/cookiePolicy.controller.js # getCookiePolicy, getCookiePolicyHtml (self-contained HTML export), sendPolicyCode (email the HTML to a teammate), putSection (per-section jsonb upsert), putPolicyMeta (effectiveDate); ownership-checked
-├── controllers/image.controller.js  # uploadImage (multer→Postgres bytea), getImage (streams bytes)
+├── controllers/image.controller.js  # uploadImage (multer→S3 PutObject, stores key), getImage (presigned GET URL → 302 redirect)
 ├── routes/image.routes.js       # GET /pulse/images/:id — auth'd, owner-scoped image serve
 ├── middlewares/upload.middleware.js  # multer memory storage, png/jpeg filter (imageUpload)
 ├── middlewares/
@@ -64,6 +66,7 @@ src/
 │   ├── cookiePolicy.js           # SECTIONS allowlist, imageIdsFrom/sanitizeIds, sweepOrphanImages, assertOwnedWebsite
 │   ├── defaultCookiePolicy.js    # DEFAULT_COOKIE_SECTIONS + defaultCookieContent() — seeded into a new website's policy
 │   ├── policyHtml.js             # renderPolicyHtml() + helpers — the saved policy as a self-contained HTML snippet (the "HTML format" export)
+│   ├── s3.js                     # S3 client + uploadObject/getObjectBuffer/deleteObject/presignGetUrl (private bucket; presigned reads)
 │   ├── api-response.js / api-error.js / async-handler.js
 └── db/                           # index.js (drizzle), redis.js (redis client)
 ```
@@ -128,26 +131,30 @@ cascade). See `openapi.yaml`.
 
 ## Images (`policy_images`)
 
-Editor image uploads are stored **in Postgres** (`bytea`), one row per image, FK →
+Editor image uploads are stored **in Amazon S3** (private bucket), one `policy_images` row
+per image holding the S3 **`key`** (`policy-images/<uuid>.<ext>`) — **not** the bytes; FK →
 `cookie_policy.id` (`onDelete: cascade`). `POST /pulse/websites/:websiteId/images`
-(jwt + ownership, multer memory storage, png/jpeg + magic-byte check, **no size
-limit**; find-or-creates the policy row) → `{ data: { url: "/pulse/images/<id>" } }`.
-`GET /pulse/images/:id` streams the bytes with the stored `Content-Type` — **authenticated
-(`jwtValidation`) and owner-scoped**: `getImage` joins `policy_images → cookie_policy →
-websites` and requires `websites.userId === req.user.id`, so a non-existent **or**
-not-owned id both return `404` (ids aren't enumerable). Served `Cache-Control: private`.
-The editor/preview `<img>` requests carry the `accessToken` cookie automatically
-(same-site); the HTML export inlines base64 server-side, so pasted policy pages never hit
-this route.
+(jwt + ownership, multer memory storage, png/jpeg + magic-byte check, **no size limit**;
+find-or-creates the policy row) `PutObject`s the bytes to S3 and stores the key →
+`{ data: { url: "/pulse/images/<id>" } }` (**unchanged shape**). `GET /pulse/images/:id`
+is **authenticated (`jwtValidation`) and owner-scoped** (`getImage` joins `policy_images →
+cookie_policy → websites`, requires `websites.userId === req.user.id`; non-existent **or**
+not-owned → `404`): it mints a **fresh short-lived presigned GET URL** for the row's key
+and **`302`-redirects** to it (`Cache-Control: no-store`), so the browser fetches directly
+from the private bucket and no presigned URL is ever persisted. The editor/preview `<img>`
+requests carry the `accessToken` cookie automatically (same-site); the HTML export inlines
+base64 server-side (bytes via `GetObject`), so pasted policy pages never hit this route.
+See `utils/s3.js` and `cookiegenerator-plan/s3-image-storage.md`.
 
 **Orphan cleanup (reconcile-on-save):** upload is eager (a row is inserted the moment a
 file is picked), so removing an image from the editor would otherwise leave the row behind.
 Every cookie-policy save (`putSection` / `putPolicyMeta`) calls `sweepOrphanImages`
 (`utils/cookiePolicy.js`), deleting this policy's `policy_images` not referenced by the
 saved `content` **∪** the client-sent `usedImageIds` (image ids still on screen across all
-section editors — protects images in a sibling section not saved yet). Always scoped to the
-owned policy's `cookie_policy_id`, so `usedImageIds` can only keep rows alive, never delete
-across policies. See `cookiegenerator-plan/cookie-policy-orphan-image-cleanup.md` and `openapi.yaml`.
+section editors — protects images in a sibling section not saved yet). For each orphan it
+**`DeleteObject`s the S3 object** (best-effort — a transient S3 error won't block the save)
+then removes the row. Always scoped to the owned policy's `cookie_policy_id`, so
+`usedImageIds` can only keep rows alive, never delete across policies. See `cookiegenerator-plan/cookie-policy-orphan-image-cleanup.md` and `openapi.yaml`.
 
 ## Auth model
 
@@ -208,7 +215,15 @@ route or `res.redirect` to the frontend.
 ## Environment (`.env`, gitignored — see `.env.example` if present)
 `PORT`, `NODE_ENV`, `ACCESS_SECRETKEY`, `REFRESH_SECRETKEY`, `ACCESS_EXPIRY`, `REFRESH_EXPIRY`,
 `DATABASE_URL`, `REDIS_URL`, `MAIL_HOST`/`MAIL_PORT`/`MAIL_USER`/`MAIL_PASSWORD`,
-`ALLOWED_VERIFY_BASES`, `ALLOWED_RESET_BASES`, `TRUST_PROXY_HOPS`, `COOKIE_SAMESITE`, `CORS_ORIGINS`.
+`ALLOWED_VERIFY_BASES`, `ALLOWED_RESET_BASES`, `TRUST_PROXY_HOPS`, `COOKIE_SAMESITE`, `CORS_ORIGINS`,
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET` (+ optional
+`S3_PRESIGN_EXPIRY`, `S3_ENDPOINT`).
+
+- **`AWS_*` / `S3_*`** — S3 storage for cookie-policy images (`utils/s3.js`). Standard AWS var
+  names so the SDK's default credential chain finds them; `S3_BUCKET` is the **bare bucket name**
+  and `AWS_REGION` the **region code** (e.g. `ap-south-1`) — not a console URL/label. Bucket must
+  be **private**; IAM creds need `s3:PutObject`/`GetObject`/`DeleteObject`. `S3_PRESIGN_EXPIRY`
+  (seconds, default `300`); `S3_ENDPOINT` only for LocalStack/MinIO.
 
 - **`CORS_ORIGINS`** — comma-separated allowlist of cross-origin frontends (scheme+host+port, no
   trailing slash) permitted to make credentialed requests. Default `http://localhost:5173` (Vite

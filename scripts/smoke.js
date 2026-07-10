@@ -377,14 +377,15 @@ async function main() {
         body: fd,
       })
     }
-    // Image serve is now authenticated + owner-scoped — send the cookie jar.
+    // Image serve is authenticated + owner-scoped and now 302-redirects to a presigned S3
+    // URL — send the cookie jar and DON'T follow the redirect (assert the 302 itself).
     function getImg(url) {
       const headers = {}
       const ck = Object.entries(jar)
         .map(([k, v]) => `${k}=${v}`)
         .join('; ')
       if (ck) headers.Cookie = ck
-      return fetch(BASE + url, { headers })
+      return fetch(BASE + url, { headers, redirect: 'manual' })
     }
     const PNG_1x1 =
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
@@ -402,9 +403,9 @@ async function main() {
 
     const imgRes = await getImg(imgUrl)
     check(
-      'image serve (authed owner) → 200 image/png',
-      imgRes.status === 200 &&
-        (imgRes.headers.get('content-type') || '').includes('image/png'),
+      'image serve (authed owner) → 302 to presigned S3 URL',
+      imgRes.status === 302 &&
+        (imgRes.headers.get('location') || '').includes('X-Amz-'),
       `got ${imgRes.status}`,
     )
 
@@ -457,7 +458,7 @@ async function main() {
       description: `<p>see <img src="${imgUrl}"></p>`,
     })
     const servedKept = await getImg(imgUrl)
-    check('image referenced in saved section is kept → 200', servedKept.status === 200, `got ${servedKept.status}`)
+    check('image referenced in saved section is kept → 302', servedKept.status === 302, `got ${servedKept.status}`)
 
     // HTML export inlines the referenced image as a base64 data URI (portable snippet).
     const htmlWithImg = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy/html`)
@@ -489,7 +490,7 @@ async function main() {
       usedImageIds: [imgBId],
     })
     const servedProtected = await getImg(imgBUrl)
-    check('image kept via usedImageIds (unsaved sibling) → 200', servedProtected.status === 200, `got ${servedProtected.status}`)
+    check('image kept via usedImageIds (unsaved sibling) → 302', servedProtected.status === 302, `got ${servedProtected.status}`)
 
     // "Delete" (reset) the policy → content restored to the default seed, all of
     // this policy's images swept, completedSections cleared.

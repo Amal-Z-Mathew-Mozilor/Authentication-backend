@@ -14,6 +14,7 @@ import {
 import { defaultCookieContent } from '../utils/defaultCookiePolicy.js'
 import { renderPolicyHtml } from '../utils/policyHtml.js'
 import { sendEmail, policyInstallEmail } from '../utils/mail.js'
+import { getObjectBuffer } from '../utils/s3.js'
 
 export const getCookiePolicy = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
@@ -45,16 +46,18 @@ async function buildPolicyHtml(websiteId) {
     .where(eq(cookiePolicy.websiteId, websiteId))
   const content = row?.content || {}
 
-  // Batch-load only the images actually referenced by the saved content, scoped to this
-  // policy, and build id → data:URI. Buffer bytes (bytea) → base64.
+  // Load the images actually referenced by the saved content, scoped to this policy, and
+  // build id → data:URI. Bytes come from S3 (by key) → base64 so the export stays
+  // self-contained. An image whose S3 object can't be fetched is skipped (its
+  // /pulse/images/<id> URL is left as-is) rather than failing the whole export.
   const imagesById = {}
   const ids = [...imageIdsFrom(JSON.stringify(content))]
   if (row?.id && ids.length) {
     const imgs = await db
       .select({
         id: policyImages.id,
+        key: policyImages.key,
         mime: policyImages.mime,
-        data: policyImages.data,
       })
       .from(policyImages)
       .where(
@@ -63,9 +66,15 @@ async function buildPolicyHtml(websiteId) {
           inArray(policyImages.id, ids),
         ),
       )
-    for (const img of imgs)
-      imagesById[img.id.toLowerCase()] =
-        `data:${img.mime};base64,${img.data.toString('base64')}`
+    for (const img of imgs) {
+      try {
+        const buf = await getObjectBuffer(img.key)
+        imagesById[img.id.toLowerCase()] =
+          `data:${img.mime};base64,${buf.toString('base64')}`
+      } catch {
+        /* object missing/unreadable — leave the /pulse/images URL unreplaced */
+      }
+    }
   }
 
   const url = site?.url || ''

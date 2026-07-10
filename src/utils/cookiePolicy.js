@@ -2,6 +2,7 @@ import db from '../db/index.js'
 import ApiError from './api-error.js'
 import { websites, policyImages } from '../models/index.js'
 import { and, eq, inArray } from 'drizzle-orm'
+import { deleteObject } from './s3.js'
 
 // Sections stored as sibling keys in the cookie_policy.content jsonb. Adding a new
 // section (e.g. cookie preferences) is a one-line allowlist entry — no migration.
@@ -29,23 +30,34 @@ export function sanitizeIds(arr) {
 
 // Mark-and-sweep: delete this policy's images that are no longer referenced by the
 // saved content OR any live section editor (keepIds). Always scoped to this policy.
+// Removes the S3 object first (best-effort — a transient S3 error must not block the
+// save; a stray object is harmless), then the DB row.
 export async function sweepOrphanImages(cookiePolicyId, keepIds) {
   const rows = await db
-    .select({ id: policyImages.id })
+    .select({ id: policyImages.id, key: policyImages.key })
     .from(policyImages)
     .where(eq(policyImages.cookiePolicyId, cookiePolicyId))
-  const orphans = rows
-    .map((r) => r.id)
-    .filter((id) => !keepIds.has(id.toLowerCase()))
-  if (orphans.length)
-    await db
-      .delete(policyImages)
-      .where(
-        and(
-          eq(policyImages.cookiePolicyId, cookiePolicyId),
-          inArray(policyImages.id, orphans),
+  const orphans = rows.filter((r) => !keepIds.has(r.id.toLowerCase()))
+  if (!orphans.length) return
+
+  for (const o of orphans) {
+    try {
+      await deleteObject(o.key)
+    } catch {
+      /* best-effort: leave the object; DB row is still removed below */
+    }
+  }
+  await db
+    .delete(policyImages)
+    .where(
+      and(
+        eq(policyImages.cookiePolicyId, cookiePolicyId),
+        inArray(
+          policyImages.id,
+          orphans.map((o) => o.id),
         ),
-      )
+      ),
+    )
 }
 
 // Ownership: the cookie policy is reachable only through a website the user owns.

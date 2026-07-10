@@ -4,6 +4,8 @@
     "smoke": "node scripts/smoke.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1084.0",
+    "@aws-sdk/s3-request-presigner": "^3.1084.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
@@ -19,7 +21,8 @@
     "multer": "^2.2.0",
     "nodemailer": "^9.0.1",
     "pg": "^8.22.0",
-    "redis": "^6.0.0"
+    "redis": "^6.0.0",
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@types/pg": "^8.20.0",

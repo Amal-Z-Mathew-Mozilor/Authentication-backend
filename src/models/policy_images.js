@@ -1,20 +1,9 @@
-import {
-  pgTable,
-  uuid,
-  varchar,
-  integer,
-  timestamp,
-  customType,
-} from 'drizzle-orm/pg-core'
+import { pgTable, uuid, varchar, integer, timestamp } from 'drizzle-orm/pg-core'
 import { cookiePolicy } from './cookie_policy.js'
 
-// Postgres bytea (Drizzle has no native type); round-trips as a Node Buffer.
-const bytea = customType({
-  dataType() {
-    return 'bytea'
-  },
-})
-
+// Cookie-policy image metadata. The bytes live in S3 (private bucket); this row stores the
+// S3 object `key` (e.g. policy-images/<uuid>.png), not the bytes. FK → cookie_policy for
+// ownership scoping + cascade delete.
 export const policyImages = pgTable('policy_images', {
   id: uuid('id').primaryKey().defaultRandom(),
 
@@ -24,9 +13,9 @@ export const policyImages = pgTable('policy_images', {
       onDelete: 'cascade',
     }),
 
-  mime: varchar('mime', { length: 32 }).notNull(),
+  key: varchar('key', { length: 1024 }).notNull(),
 
-  data: bytea('data').notNull(),
+  mime: varchar('mime', { length: 32 }).notNull(),
 
   byteSize: integer('byte_size').notNull(),
 
