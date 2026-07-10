@@ -90,8 +90,11 @@ plus policy-level keys: scalar `effectiveDate` (ISO `YYYY-MM-DD`), `completedSec
 (array of section keys, **server-derived** — `putSection` auto-adds the saved section,
 deduped; never read from the request body; the editor's progress tracking), and
 `generatedAt` (ISO timestamp, **server-derived** — set only when the "Generate cookie
-policy" action sends `generated: true`; its presence is the "already generated" gate the
-frontend reads to route a returning user to the read-only preview instead of the wizard).
+policy" action sends `generated: true`, and **cleared by any other save** (`putSection`, or
+`putPolicyMeta` without `generated: true`) so it means "saved content == the generated
+snapshot"; its presence is the "already generated" gate the frontend reads to route a
+returning user to the read-only preview instead of the wizard — a saved edit after
+generating sends them back to the wizard to re-generate).
 More sections add sibling keys with no migration. Routes (nested, behind
 `jwtValidation`, ownership verified via the
 website's owner): `GET /cookie-policy` returns the whole `content` (or `{}`);

@@ -130,6 +130,10 @@ export const putSection = asyncHandler(async (req, res) => {
       [section]: sectionData,
       completedSections,
     }
+    // A saved edit un-generates the policy: the saved content no longer matches the
+    // generated snapshot, so drop generatedAt. Clicking "Cookie policy" then reopens the
+    // wizard (needs re-generation). The Generate action re-stamps it afterwards.
+    delete content.generatedAt
     await db
       .update(cookiePolicy)
       .set({ content })
@@ -218,6 +222,10 @@ export const putPolicyMeta = asyncHandler(async (req, res) => {
     policyId = ins.id
   } else {
     content = { ...(existing.content || {}), effectiveDate, ...genStamp }
+    // A plain meta save (no `generated: true`) is an edit → un-generate the policy so the
+    // dashboard reopens the wizard. The Generate action (generated === true) re-stamps it
+    // via genStamp above.
+    if (generated !== true) delete content.generatedAt
     await db
       .update(cookiePolicy)
       .set({ content })

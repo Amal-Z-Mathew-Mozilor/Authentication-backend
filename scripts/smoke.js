@@ -248,6 +248,35 @@ async function main() {
       `got ${JSON.stringify(cpGenBody?.data?.content?.generatedAt)}`,
     )
 
+    // A saved edit after generating un-generates the policy (dashboard reopens the wizard).
+    await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy/aboutCookies`, {
+      heading: 'What are cookies?',
+      description: 'Edited after generate.',
+    })
+    const afterSectionEdit = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
+    const aseBody = await afterSectionEdit.json().catch(() => ({}))
+    check(
+      'section save after generate clears generatedAt',
+      !aseBody?.data?.content?.generatedAt,
+      `got ${JSON.stringify(aseBody?.data?.content?.generatedAt)}`,
+    )
+
+    // Re-generate, then a non-generate meta save (effectiveDate only) also clears it.
+    await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy`, {
+      effectiveDate: '2026-07-07',
+      generated: true,
+    })
+    await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy`, {
+      effectiveDate: '2026-07-08',
+    })
+    const afterMetaEdit = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
+    const ameBody = await afterMetaEdit.json().catch(() => ({}))
+    check(
+      'non-generate meta save clears generatedAt',
+      !ameBody?.data?.content?.generatedAt,
+      `got ${JSON.stringify(ameBody?.data?.content?.generatedAt)}`,
+    )
+
     // HTML export ("HTML format" add-to-site option) — self-contained snippet.
     const htmlRes = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy/html`)
     const htmlBody = await htmlRes.json().catch(() => ({}))
