@@ -105,7 +105,9 @@ returning user to the read-only preview instead of the wizard — a saved edit a
 generating sends them back to the wizard to re-generate).
 More sections add sibling keys with no migration. Routes (nested, behind
 `jwtValidation`, ownership verified via the
-website's owner): `GET /cookie-policy` returns the whole `content` (or `{}`);
+website's owner): `GET /cookie-policy` returns the whole `content` (or `{}`) **plus
+`updatedAt`** (the row's last edit/generate time — the rendered "Last updated" derives from
+it, so copying/sending the HTML never changes it);
 `GET /cookie-policy/html` returns `{ html }` — the saved policy rendered as a
 **self-contained HTML snippet** (styles + heading + dates + non-empty sections + footer,
 Start/End markers) for the "HTML format" add-to-site export, with every `/pulse/images/:id`

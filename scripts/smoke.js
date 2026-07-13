@@ -214,6 +214,22 @@ async function main() {
     )
     check('cookie policy PUT (aboutCookies) → 200', cpPut.status === 200, `got ${cpPut.status}`)
 
+    // GET returns updatedAt (last edit/generate time), and it advances on a save — this is
+    // what the rendered "Last updated" derives from (not render time).
+    const u0 = seedBody?.data?.updatedAt
+    check(
+      'cookie policy GET returns updatedAt (ISO)',
+      typeof u0 === 'string' && !Number.isNaN(Date.parse(u0)),
+      `got ${JSON.stringify(u0)}`,
+    )
+    const cpAfterEdit = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
+    const u1 = (await cpAfterEdit.json().catch(() => ({})))?.data?.updatedAt
+    check(
+      'updatedAt advances after a section save',
+      typeof u1 === 'string' && Date.parse(u1) > Date.parse(u0),
+      `got ${JSON.stringify(u1)} vs ${JSON.stringify(u0)}`,
+    )
+
     // Second section — must persist alongside the first (sibling-key merge)
     const cpPutUse = await apiAt(
       'PUT',

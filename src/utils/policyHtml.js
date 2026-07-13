@@ -52,9 +52,16 @@ export const escapeHtml = (s) =>
 // Compose the snippet. `imagesById` maps a lowercased image uuid → its data: URI; any
 // /pulse/images/<id> reference with a known id is inlined, unknown ones are left as-is
 // (a single broken <img> beats failing the whole export).
-export function renderPolicyHtml({ content = {}, url = '', imagesById = {} } = {}) {
+export function renderPolicyHtml({
+  content = {},
+  url = '',
+  imagesById = {},
+  lastUpdated = '',
+} = {}) {
   const effective = formatLongDate(content.effectiveDate || todayISO())
-  const updated = formatLongDate(todayISO())
+  // "Last updated" = when the policy was last edited/generated (cookie_policy.updatedAt),
+  // NOT render time — so copying/sending the HTML doesn't change it. Fallback to today.
+  const updated = formatLongDate(lastUpdated || todayISO())
 
   const parts = [
     '<!-- Start Pulse cookie policy -->',

@@ -12,20 +12,24 @@ import {
   assertOwnedWebsite,
 } from '../utils/cookiePolicy.js'
 import { defaultCookieContent } from '../utils/defaultCookiePolicy.js'
-import { renderPolicyHtml } from '../utils/policyHtml.js'
+import { renderPolicyHtml, todayISO } from '../utils/policyHtml.js'
 import { sendEmail, policyInstallEmail } from '../utils/mail.js'
 import { getObjectBuffer } from '../utils/s3.js'
 
 export const getCookiePolicy = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
   const [row] = await db
-    .select({ content: cookiePolicy.content })
+    .select({ content: cookiePolicy.content, updatedAt: cookiePolicy.updatedAt })
     .from(cookiePolicy)
     .where(eq(cookiePolicy.websiteId, req.params.websiteId))
   const content = row?.content || {}
+  // updatedAt (last edit/generate) — used by the client to show an accurate "Last updated".
+  const updatedAt = row?.updatedAt || null
   return res
     .status(200)
-    .json(new ApiResponse(200, { content }, 'cookie policy fetched sucessfully'))
+    .json(
+      new ApiResponse(200, { content, updatedAt }, 'cookie policy fetched sucessfully'),
+    )
 })
 
 // Build the SAVED policy as a self-contained HTML snippet (styles + heading + dates +
@@ -41,10 +45,18 @@ async function buildPolicyHtml(websiteId) {
     .where(eq(websites.id, websiteId))
 
   const [row] = await db
-    .select({ id: cookiePolicy.id, content: cookiePolicy.content })
+    .select({
+      id: cookiePolicy.id,
+      content: cookiePolicy.content,
+      updatedAt: cookiePolicy.updatedAt,
+    })
     .from(cookiePolicy)
     .where(eq(cookiePolicy.websiteId, websiteId))
   const content = row?.content || {}
+  // Last edit/generate date for the "Last updated" line (YYYY-MM-DD; not render time).
+  const lastUpdated = row?.updatedAt
+    ? new Date(row.updatedAt).toISOString().slice(0, 10)
+    : todayISO()
 
   // Load the images actually referenced by the saved content, scoped to this policy, and
   // build id → data:URI. Bytes come from S3 (by key) → base64 so the export stays
@@ -78,7 +90,10 @@ async function buildPolicyHtml(websiteId) {
   }
 
   const url = site?.url || ''
-  return { html: renderPolicyHtml({ content, url, imagesById }), url }
+  return {
+    html: renderPolicyHtml({ content, url, imagesById, lastUpdated }),
+    url,
+  }
 }
 
 // The "HTML format" export: the owner pastes the snippet onto their own site. Owner-scoped.
