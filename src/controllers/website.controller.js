@@ -1,8 +1,7 @@
-import ApiError from '../utils/api-error.js'
-import ApiResponse from '../utils/api-response.js'
+import { ApiError, ApiResponse } from '../utils/response/index.js'
 import * as websiteRepository from '../repositories/website.repository.js'
 import { asyncHandler } from '../utils/async-handler.js'
-import { defaultCookieContent } from '../utils/defaultCookiePolicy.js'
+import { defaultCookieContent } from '../utils/cookiePolicy/index.js'
 
 // All handlers are scoped to the authenticated user (req.user.id, set by jwtValidation).
 

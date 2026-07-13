@@ -1,7 +1,6 @@
 import { redisClient } from '../db/redis.js'
-import ApiError from '../utils/api-error.js'
-import { verifyAccess } from '../utils/jwt.js'
-import { clearAuthCookies } from '../utils/cookies.js'
+import { ApiError } from '../utils/response/index.js'
+import { verifyAccess, clearAuthCookies } from '../utils/auth/index.js'
 /**
  * Verify the accessToken cookie and reject revoked/expired/invalidated sessions.
  * On success attaches req.user = decoded token payload and calls next().

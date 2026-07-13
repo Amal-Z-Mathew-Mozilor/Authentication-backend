@@ -1,7 +1,7 @@
-import ApiError from './api-error.js'
-import * as websiteRepository from '../repositories/website.repository.js'
-import * as policyImageRepository from '../repositories/policyImage.repository.js'
-import { deleteObject } from './s3.js'
+import ApiError from '../response/api-error.js'
+import * as websiteRepository from '../../repositories/website.repository.js'
+import * as policyImageRepository from '../../repositories/policyImage.repository.js'
+import { deleteObject } from '../aws/s3.js'
 
 // Sections stored as sibling keys in the cookie_policy.content jsonb. Adding a new
 // section (e.g. cookie preferences) is a one-line allowlist entry — no migration.

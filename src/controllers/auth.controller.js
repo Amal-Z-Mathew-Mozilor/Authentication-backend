@@ -1,21 +1,24 @@
-import ApiError from '../utils/api-error.js'
-import ApiResponse from '../utils/api-response.js'
+import { ApiError, ApiResponse } from '../utils/response/index.js'
 import {
   emailVerification,
   passwordResetVerification,
   sendEmail,
-} from '../utils/mail.js'
-import { hashPassword, verifyPassword } from '../utils/password.js'
-import { hashToken, tokenGeneration } from '../utils/token.js'
+  hashPassword,
+  verifyPassword,
+  hashToken,
+  tokenGeneration,
+  acessSign,
+  refreshSign,
+  verifyRefresh,
+  resolveResetBase,
+  resolveVerifyBase,
+  clearAuthCookies,
+} from '../utils/auth/index.js'
 import * as userRepository from '../repositories/user.repository.js'
 import * as emailVerificationRepository from '../repositories/emailVerification.repository.js'
 import * as passwordResetRepository from '../repositories/passwordReset.repository.js'
 import { asyncHandler } from '../utils/async-handler.js'
-import { acessSign, refreshSign, verifyRefresh } from '../utils/jwt.js'
 import { redisClient } from '../db/redis.js'
-import { resolveResetBase } from '../utils/resetBase.js'
-import { resolveVerifyBase } from '../utils/verifyBase.js'
-import { clearAuthCookies } from '../utils/cookies.js'
 import jwt from 'jsonwebtoken'
 
 // Environment configuration — all process.env reads live here at the top of the file.

@@ -1,11 +1,10 @@
-import ApiError from '../utils/api-error.js'
-import ApiResponse from '../utils/api-response.js'
+import { ApiError, ApiResponse } from '../utils/response/index.js'
 import * as websiteRepository from '../repositories/website.repository.js'
 import * as cookiePolicyRepository from '../repositories/cookiePolicy.repository.js'
 import * as policyImageRepository from '../repositories/policyImage.repository.js'
 import { asyncHandler } from '../utils/async-handler.js'
 import { v4 as uuidv4 } from 'uuid'
-import { uploadObject, presignGetUrl } from '../utils/s3.js'
+import { uploadObject, presignGetUrl } from '../utils/aws/index.js'
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

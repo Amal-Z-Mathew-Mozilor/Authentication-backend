@@ -1,7 +1,7 @@
 import { validationResult } from 'express-validator'
 import { loginEmailValidator } from '../validators/user.validator.js'
 import { redisClient } from '../db/redis.js'
-import ApiError from '../utils/api-error.js'
+import { ApiError } from '../utils/response/index.js'
 import { asyncHandler } from '../utils/async-handler.js'
 
 const MAX_IP_ATTEMPTS = 10

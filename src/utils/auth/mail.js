@@ -1,7 +1,7 @@
 import Mailgen from 'mailgen'
 import nodemailer from 'nodemailer'
 import 'dotenv/config'
-import { escapeHtml } from './policyHtml.js'
+import { escapeHtml } from '../cookiePolicy/policyHtml.js'
 
 // Environment configuration — all process.env reads live here at the top of the file.
 const MAIL_HOST = process.env.MAIL_HOST

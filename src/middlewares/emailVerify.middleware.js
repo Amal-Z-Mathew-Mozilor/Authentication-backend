@@ -1,5 +1,5 @@
-import { hashToken } from '../utils/token.js'
-import ApiError from '../utils/api-error.js'
+import { hashToken } from '../utils/auth/index.js'
+import { ApiError } from '../utils/response/index.js'
 import * as emailVerificationRepository from '../repositories/emailVerification.repository.js'
 import { asyncHandler } from '../utils/async-handler.js'
 

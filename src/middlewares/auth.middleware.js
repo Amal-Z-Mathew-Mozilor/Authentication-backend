@@ -1,5 +1,5 @@
 import { validationResult } from 'express-validator'
-import ApiError from '../utils/api-error.js'
+import { ApiError } from '../utils/response/index.js'
 
 /**
  * Turn express-validator results into a 422, or call next() when the request is clean.

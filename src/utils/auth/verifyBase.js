@@ -1,4 +1,4 @@
-import ApiError from './api-error.js'
+import ApiError from '../response/api-error.js'
 import 'dotenv/config'
 
 // Environment configuration — all process.env reads live here at the top of the file.

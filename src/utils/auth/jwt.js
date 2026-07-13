@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken'
-import { redisClient } from '../db/redis.js'
-import * as userRepository from '../repositories/user.repository.js'
-import ApiError from './api-error.js'
+import { redisClient } from '../../db/redis.js'
+import * as userRepository from '../../repositories/user.repository.js'
+import ApiError from '../response/api-error.js'
 import 'dotenv/config'
 import crypto from 'crypto'
 

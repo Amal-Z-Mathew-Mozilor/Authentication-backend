@@ -1,5 +1,4 @@
-import ApiError from '../utils/api-error.js'
-import ApiResponse from '../utils/api-response.js'
+import { ApiError, ApiResponse } from '../utils/response/index.js'
 import * as cookiePolicyRepository from '../repositories/cookiePolicy.repository.js'
 import * as websiteRepository from '../repositories/website.repository.js'
 import * as policyImageRepository from '../repositories/policyImage.repository.js'
@@ -10,11 +9,12 @@ import {
   sanitizeIds,
   sweepOrphanImages,
   assertOwnedWebsite,
-} from '../utils/cookiePolicy.js'
-import { defaultCookieContent } from '../utils/defaultCookiePolicy.js'
-import { renderPolicyHtml, todayISO } from '../utils/policyHtml.js'
-import { sendEmail, policyInstallEmail } from '../utils/mail.js'
-import { getObjectBuffer } from '../utils/s3.js'
+  defaultCookieContent,
+  renderPolicyHtml,
+  todayISO,
+} from '../utils/cookiePolicy/index.js'
+import { sendEmail, policyInstallEmail } from '../utils/auth/index.js'
+import { getObjectBuffer } from '../utils/aws/index.js'
 
 /**
  * Fetch a website's saved cookie policy content plus its last-updated timestamp.

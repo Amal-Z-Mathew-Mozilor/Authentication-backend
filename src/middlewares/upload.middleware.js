@@ -1,5 +1,5 @@
 import multer from 'multer'
-import ApiError from '../utils/api-error.js'
+import { ApiError } from '../utils/response/index.js'
 
 const ALLOWED = new Set(['image/png', 'image/jpeg'])
 

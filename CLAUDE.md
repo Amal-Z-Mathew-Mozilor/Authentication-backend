@@ -64,17 +64,20 @@ src/
 ├── validators/website.validator.js  # websiteValidator() — name + url (use .bail())
 ├── validators/cookiePolicy.validator.js  # cookieSectionValidator() — heading + description; effectiveDateValidator() — ISO YYYY-MM-DD
 ├── scripts/smoke.js              # auth + website CRUD smoke test (npm run smoke)
-├── utils/
-│   ├── jwt.js                    # acessSign, refreshSign, verifyAccess, verifyRefresh (user lookup via user.repository)
-│   ├── token.js                  # tokenGeneration (raw+sha256), hashToken
-│   ├── password.js               # hashPassword, verifyPassword (bcrypt)
-│   ├── mail.js                   # emailVerification / passwordResetVerification templates + sendEmail
-│   ├── resetBase.js / verifyBase.js  # allowlist validators for client-supplied email link bases
-│   ├── cookiePolicy.js           # SECTIONS allowlist, imageIdsFrom/sanitizeIds, sweepOrphanImages (S3 + policyImage.repository), assertOwnedWebsite (website.repository)
-│   ├── defaultCookiePolicy.js    # DEFAULT_COOKIE_SECTIONS + defaultCookieContent() — seeded into a new website's policy
-│   ├── policyHtml.js             # renderPolicyHtml() + helpers — the saved policy as a self-contained HTML snippet (the "HTML format" export)
-│   ├── s3.js                     # S3 client + uploadObject/getObjectBuffer/deleteObject/presignGetUrl (private bucket; presigned reads)
-│   ├── api-response.js / api-error.js / async-handler.js
+├── utils/                        # grouped by domain; each folder has an index.js barrel (import from '../utils/<domain>/index.js')
+│   ├── async-handler.js          # (root) asyncHandler — forwards async route errors to next()
+│   ├── response/                 # HTTP response types (barrel re-exports as named)
+│   │   ├── api-response.js        # ApiResponse — success envelope
+│   │   └── api-error.js           # ApiError — error type (Error subclass w/ status)
+│   ├── auth/                      # jwt (user lookup via user.repository), token, password (bcrypt),
+│   │   │                          # cookies (clearAuthCookies), mail (verify/reset/policy email templates + sendEmail),
+│   │   └── …                      # resetBase / verifyBase (email-link-base allowlists)
+│   ├── aws/
+│   │   └── s3.js                  # S3 client + uploadObject/getObjectBuffer/deleteObject/presignGetUrl (private bucket; presigned reads)
+│   └── cookiePolicy/
+│       ├── cookiePolicy.js        # SECTIONS allowlist, imageIdsFrom/sanitizeIds, sweepOrphanImages (S3 + policyImage.repository), assertOwnedWebsite (website.repository)
+│       ├── defaultCookiePolicy.js # DEFAULT_COOKIE_SECTIONS + defaultCookieContent() — seeded into a new website's policy
+│       └── policyHtml.js          # renderPolicyHtml() + helpers — the saved policy as a self-contained HTML snippet
 └── db/                           # index.js (drizzle), redis.js (redis client)
 ```
 
@@ -93,7 +96,7 @@ throw `422` with `errors:[{path:'name'|'url', msg}]` on a collision (rendered in
 client). This is an **app-level check** (query-then-write) — no DB unique index yet
 (existing duplicate rows would fail the migration; deferred pending dedup). **`POST /` also seeds the website's
 `cookie_policy` row** with default content (all sections + `effectiveDate` = today,
-from `utils/defaultCookiePolicy.js`) in the same transaction, so the editor opens
+from `utils/cookiePolicy/defaultCookiePolicy.js`) in the same transaction, so the editor opens
 pre-filled. See `openapi.yaml`.
 
 ## Cookie Policy resource (`/pulse/websites/:websiteId/cookie-policy`)
@@ -118,9 +121,9 @@ it, so copying/sending the HTML never changes it);
 `GET /cookie-policy/html` returns `{ html }` — the saved policy rendered as a
 **self-contained HTML snippet** (styles + heading + dates + non-empty sections + footer,
 Start/End markers) for the "HTML format" add-to-site export, with every `/pulse/images/:id`
-reference **inlined as a base64 `data:` URI** so it renders on any host (see `utils/policyHtml.js`);
+reference **inlined as a base64 `data:` URI** so it renders on any host (see `utils/cookiePolicy/policyHtml.js`);
 `POST /cookie-policy/send-code` (body `{ email }`, validated) emails that same snippet to a
-teammate in a Pulse-branded template (`policyInstallEmail` in `utils/mail.js`, via the raw-html
+teammate in a Pulse-branded template (`policyInstallEmail` in `utils/auth/mail.js`, via the raw-html
 `sendEmail` path) — mail-transport errors are swallowed so a mail outage still returns `200`;
 `PUT /cookie-policy/:section` upserts one section (body `{ heading, description }`);
 `PUT /cookie-policy` (base path, no `:section`) upserts policy meta (body
@@ -153,12 +156,12 @@ and **`302`-redirects** to it (`Cache-Control: no-store`), so the browser fetche
 from the private bucket and no presigned URL is ever persisted. The editor/preview `<img>`
 requests carry the `accessToken` cookie automatically (same-site); the HTML export inlines
 base64 server-side (bytes via `GetObject`), so pasted policy pages never hit this route.
-See `utils/s3.js` and `cookiegenerator-plan/s3-image-storage.md`.
+See `utils/aws/s3.js` and `cookiegenerator-plan/s3-image-storage.md`.
 
 **Orphan cleanup (reconcile-on-save):** upload is eager (a row is inserted the moment a
 file is picked), so removing an image from the editor would otherwise leave the row behind.
 Every cookie-policy save (`putSection` / `putPolicyMeta`) calls `sweepOrphanImages`
-(`utils/cookiePolicy.js`), deleting this policy's `policy_images` not referenced by the
+(`utils/cookiePolicy/cookiePolicy.js`), deleting this policy's `policy_images` not referenced by the
 saved `content` **∪** the client-sent `usedImageIds` (image ids still on screen across all
 section editors — protects images in a sibling section not saved yet). For each orphan it
 **`DeleteObject`s the S3 object** (best-effort — a transient S3 error won't block the save)
@@ -185,7 +188,7 @@ then removes the row. Always scoped to the owned policy's `cookie_policy_id`, so
   on `rotateToken`, and **bumped to now on `changePassword`** — which invalidates every existing
   access/refresh token (logs the user out everywhere). Enforced in **both** `jwtValidation` and
   `rotateToken` (`iat < cutoff` → `401 "Session invalidated, please login again"` + cookies cleared
-  via `utils/cookies.js` `clearAuthCookies`). Not deleted on logout; `resetPassword` is excluded.
+  via `utils/auth/cookies.js` `clearAuthCookies`). Not deleted on logout; `resetPassword` is excluded.
   See `AI_DOCS/session_iat_invalidation.md`.
 
 ## Endpoints
@@ -202,6 +205,7 @@ consuming the token**, so the client can validate a reset link on page load befo
 form. See `AI_DOCS/reset_token_precheck.md`.
 
 ## Response envelope
+
 - **Success:** `new ApiResponse(code, data, message)` → `{ statuscode, data, message, sucess }`
   (the flag is misspelled **`sucess`** — leave it, clients don't rely on it).
 - **Errors:** `throw new ApiError(code, message, error)` → caught by `asyncHandler` → the global
@@ -209,6 +213,7 @@ form. See `AI_DOCS/reset_token_precheck.md`.
   express-validator array in `errors`; the `429` IP limit puts `{ retryAfter }` there.
 
 ## Data access (repositories)
+
 **All Drizzle queries live in `src/repositories/` — one file per table.** Controllers,
 middlewares, and utils **never** build queries inline; they import a repository
 (`import * as userRepository from '../repositories/user.repository.js'`) and call its
@@ -223,11 +228,13 @@ so there is no `refreshToken` repository. See
 `cookiegenerator-plan/repository-layer-extraction.md`.
 
 ## Validation
+
 Validators (`user.validator.js`) run in the route chain, then `validation()` throws `422` with the
 field errors. Chains use **`.bail()`** after `notEmpty()` so an empty field shows only
 "… is required" (not the format errors too).
 
 ## Frontend-agnostic design (important)
+
 The backend returns **JSON only** and references **no frontend routes** in code (`verifyMail` does
 **not** redirect — it returns JSON; the frontend routes based on the result). The one frontend
 reference is the **email link base**, which is **supplied by the client** (`verifyBase`/`resetBase`
@@ -236,13 +243,14 @@ in the request body) and **validated against an allowlist** (`resolveVerifyBase`
 route or `res.redirect` to the frontend.
 
 ## Environment (`.env`, gitignored — see `.env.example` if present)
+
 `PORT`, `NODE_ENV`, `ACCESS_SECRETKEY`, `REFRESH_SECRETKEY`, `ACCESS_EXPIRY`, `REFRESH_EXPIRY`,
 `DATABASE_URL`, `REDIS_URL`, `MAIL_HOST`/`MAIL_PORT`/`MAIL_USER`/`MAIL_PASSWORD`,
 `ALLOWED_VERIFY_BASES`, `ALLOWED_RESET_BASES`, `TRUST_PROXY_HOPS`, `COOKIE_SAMESITE`, `CORS_ORIGINS`,
 `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET` (+ optional
 `S3_PRESIGN_EXPIRY`, `S3_ENDPOINT`).
 
-- **`AWS_*` / `S3_*`** — S3 storage for cookie-policy images (`utils/s3.js`). Standard AWS var
+- **`AWS_*` / `S3_*`** — S3 storage for cookie-policy images (`utils/aws/s3.js`). Standard AWS var
   names so the SDK's default credential chain finds them; `S3_BUCKET` is the **bare bucket name**
   and `AWS_REGION` the **region code** (e.g. `ap-south-1`) — not a console URL/label. Bucket must
   be **private**; IAM creds need `s3:PutObject`/`GetObject`/`DeleteObject`. `S3_PRESIGN_EXPIRY`
@@ -263,14 +271,15 @@ route or `res.redirect` to the frontend.
 
 - **`TRUST_PROXY_HOPS`** — number of trusted proxies in front of Node (default `0`). Sets
   Express `trust proxy` so `req.ip` reads the real client IP from `X-Forwarded-For` instead of
-  the load balancer's IP (otherwise the per-IP login limiter blocks *all* traffic through the
+  the load balancer's IP (otherwise the per-IP login limiter blocks _all_ traffic through the
   proxy). Set to `1` behind a single nginx; increase by one per extra hop (CDN/L7 LB). Never
   set higher than the real hop count — the extra entries are client-spoofable.
 
 ## Gotchas
+
 - **Secrets must not contain `$`.** Docker Compose interpolates `$word` in `env_file` values →
   blanks them. Use plain hex/base64 for `*_SECRETKEY` (`openssl rand -hex 32`).
-- **`REFRESH_EXPIRY`** must include units (`7d`, `12h`) — a bare `"604800"` is parsed as *ms*.
+- **`REFRESH_EXPIRY`** must include units (`7d`, `12h`) — a bare `"604800"` is parsed as _ms_.
 - The active reset-token middleware is **`passwordReset.middleware.js`** (exported as
   `tokenValidation`). Don't confuse the export name with a filename — there is no
   `tokenValidation.middleware.js` (a dead duplicate by that name was removed).
@@ -278,5 +287,6 @@ route or `res.redirect` to the frontend.
   volume) has no tables until you push — the compose `backend` command auto-pushes on start.
 
 ## AI-assisted docs
+
 Feature plans/specs live in `backend/AI_DOCS/*.md` (one file per feature). Keep them in sync with
 the implementation when you change a feature.

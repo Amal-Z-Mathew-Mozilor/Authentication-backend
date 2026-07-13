@@ -12,7 +12,7 @@ import 'dotenv/config'
 import { eq } from 'drizzle-orm'
 import db from '../src/db/index.js'
 import { users } from '../src/models/index.js'
-import { hashPassword } from '../src/utils/password.js'
+import { hashPassword } from '../src/utils/auth/index.js'
 
 const BASE = process.env.SMOKE_BASE || 'http://localhost:8000'
 const PREFIX = '/pulse/users'
