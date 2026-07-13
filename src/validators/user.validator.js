@@ -1,4 +1,8 @@
 import { body } from 'express-validator'
+/**
+ * Build the express-validator chain for signup (email + password).
+ * @returns {import('express-validator').ValidationChain[]} Chain (email valid/normalized; password ≥12 chars with upper/lower/number/special and no spaces; .bail() after each notEmpty).
+ */
 export const registerValidator = () => {
   return [
     body('email')
@@ -28,6 +32,10 @@ export const registerValidator = () => {
       .withMessage('Password cannot contain spaces'),
   ]
 }
+/**
+ * Build the express-validator chain for the forgot-password request email.
+ * @returns {import('express-validator').ValidationChain[]} Chain (email required, valid, normalized; bails when empty).
+ */
 export const forgotPasswordEmail = () => {
   return [
     body('email')
@@ -40,6 +48,10 @@ export const forgotPasswordEmail = () => {
       .normalizeEmail(),
   ]
 }
+/**
+ * Build the express-validator chain for password reset (email + newPassword + confirmPassword).
+ * @returns {import('express-validator').ValidationChain[]} Chain (email valid/normalized; newPassword and confirmPassword each ≥12 chars with upper/lower/number/special and no spaces; .bail() after each notEmpty).
+ */
 export const resetPasswordValidator = () => {
   return [
     body('email')
@@ -86,6 +98,10 @@ export const resetPasswordValidator = () => {
       .withMessage('Password cannot contain spaces'),
   ]
 }
+/**
+ * Build the express-validator chain for the login email field.
+ * @returns {import('express-validator').ValidationChain[]} Chain (email required, valid, normalized; bails when empty).
+ */
 export const loginEmailValidator = () => {
   return [
     body('email')
@@ -98,6 +114,10 @@ export const loginEmailValidator = () => {
       .normalizeEmail(),
   ]
 }
+/**
+ * Build the express-validator chain for change-password (oldPassword + newPassword + confirmPassword).
+ * @returns {import('express-validator').ValidationChain[]} Chain (each of oldPassword, newPassword, confirmPassword ≥12 chars with upper/lower/number/special and no spaces; .bail() after each notEmpty).
+ */
 export const changePasswordValidator = () => {
   return [
     body('oldPassword')

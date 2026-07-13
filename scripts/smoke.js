@@ -22,6 +22,13 @@ const password = 'Abcdefgh1!xx' // 12+ chars, upper/lower/number/special — pol
 let passed = 0
 let failed = 0
 const lines = []
+/**
+ * Record one smoke-test assertion (a PASS/FAIL line) and bump the pass/fail tally.
+ * @param {string} name - Human-readable check description.
+ * @param {boolean} ok - Whether the assertion held.
+ * @param {string} [detail] - Optional extra context appended after "—" (e.g. "got 500").
+ * @returns {void}
+ */
 function check(name, ok, detail = '') {
   lines.push(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`)
   ok ? passed++ : failed++
@@ -29,6 +36,12 @@ function check(name, ok, detail = '') {
 
 // Minimal cookie jar over fetch (fetch has no automatic cookie handling).
 let jar = {}
+/**
+ * Absorb Set-Cookie headers from a fetch Response into the module-level cookie jar.
+ * A cookie cleared by the server (empty value) is removed from the jar.
+ * @param {Response} res - A fetch Response whose Set-Cookie headers are read.
+ * @returns {void}
+ */
 function absorb(res) {
   const raw = res.headers.getSetCookie?.() ?? []
   for (const c of raw) {
@@ -36,10 +49,18 @@ function absorb(res) {
     const i = pair.indexOf('=')
     const k = pair.slice(0, i).trim()
     const v = pair.slice(i + 1).trim()
-    if (!v) delete jar[k] // server cleared this cookie
+    if (!v)
+      delete jar[k] // server cleared this cookie
     else jar[k] = v
   }
 }
+/**
+ * Send a JSON request to a path under the /pulse/users prefix, replaying + absorbing cookies.
+ * @param {string} method - HTTP method.
+ * @param {string} path - Path under the /pulse/users prefix (e.g. "/login").
+ * @param {object} [body] - Optional JSON body (sets Content-Type when present).
+ * @returns {Promise<Response>} The fetch Response (its Set-Cookie headers already absorbed).
+ */
 async function req(method, path, body) {
   const headers = {}
   const ck = Object.entries(jar)
@@ -57,6 +78,13 @@ async function req(method, path, body) {
 }
 
 // Same, but for an arbitrary path under BASE (e.g. /pulse/websites).
+/**
+ * Send a JSON request to an arbitrary path under BASE (e.g. /pulse/websites), with cookies.
+ * @param {string} method - HTTP method.
+ * @param {string} path - Absolute path under BASE.
+ * @param {object} [body] - Optional JSON body (sets Content-Type when present).
+ * @returns {Promise<Response>} The fetch Response (its Set-Cookie headers already absorbed).
+ */
 async function apiAt(method, path, body) {
   const headers = {}
   const ck = Object.entries(jar)
@@ -73,6 +101,10 @@ async function apiAt(method, path, body) {
   return res
 }
 
+/**
+ * Delete the seeded smoke-test user from the DB (best-effort; any error is swallowed).
+ * @returns {Promise<void>}
+ */
 async function cleanup() {
   try {
     await db.delete(users).where(eq(users.email, email))
@@ -81,6 +113,12 @@ async function cleanup() {
   }
 }
 
+/**
+ * Run the full auth + website/cookie-policy/image smoke suite against a running backend.
+ * Seeds a verified user, exercises happy and negative paths, tallies checks, prints the
+ * report, then exits (0 = all passed, 1 = a check failed/crashed, 2 = backend unreachable).
+ * @returns {Promise<void>}
+ */
 async function main() {
   // Preflight: is the backend reachable at all?
   try {
@@ -100,10 +138,21 @@ async function main() {
   try {
     // Negative cases first
     const meNoAuth = await req('POST', '/me')
-    check('me without auth → 401', meNoAuth.status === 401, `got ${meNoAuth.status}`)
+    check(
+      'me without auth → 401',
+      meNoAuth.status === 401,
+      `got ${meNoAuth.status}`,
+    )
 
-    const badLogin = await req('POST', '/login', { email, password: 'Wrongpass1!xx' })
-    check('login wrong password → 401', badLogin.status === 401, `got ${badLogin.status}`)
+    const badLogin = await req('POST', '/login', {
+      email,
+      password: 'Wrongpass1!xx',
+    })
+    check(
+      'login wrong password → 401',
+      badLogin.status === 401,
+      `got ${badLogin.status}`,
+    )
     jar = {}
 
     // Happy path: login → me → rotate → me → logout → me(dead)
@@ -120,14 +169,22 @@ async function main() {
     check('rotate issues new accessToken', !!jar.accessToken)
 
     const meAfterRotate = await req('POST', '/me')
-    check('me after rotate → 200', meAfterRotate.status === 200, `got ${meAfterRotate.status}`)
+    check(
+      'me after rotate → 200',
+      meAfterRotate.status === 200,
+      `got ${meAfterRotate.status}`,
+    )
 
     // Website CRUD (authenticated) — regression for the /pulse/websites resource
     const created = await apiAt('POST', '/pulse/websites', {
       name: 'Smoke Site',
       url: 'https://smoke.example.com',
     })
-    check('website create → 201', created.status === 201, `got ${created.status}`)
+    check(
+      'website create → 201',
+      created.status === 201,
+      `got ${created.status}`,
+    )
     const createdBody = await created.json().catch(() => ({}))
     const wid = createdBody?.data?.id
     check('website create returns id', !!wid)
@@ -147,19 +204,31 @@ async function main() {
       name: 'Smoke Site', // same name as wid
       url: 'https://unique-1.example.com',
     })
-    check('website duplicate name → 422', dupName.status === 422, `got ${dupName.status}`)
+    check(
+      'website duplicate name → 422',
+      dupName.status === 422,
+      `got ${dupName.status}`,
+    )
     const dupUrl = await apiAt('POST', '/pulse/websites', {
       name: 'Totally Different Name',
       url: 'https://smoke.example.com/', // same url as wid (trailing slash ignored)
     })
-    check('website duplicate url → 422', dupUrl.status === 422, `got ${dupUrl.status}`)
+    check(
+      'website duplicate url → 422',
+      dupUrl.status === 422,
+      `got ${dupUrl.status}`,
+    )
 
     // A genuinely unique name+url still creates.
     const created2 = await apiAt('POST', '/pulse/websites', {
       name: 'Smoke Site 2',
       url: 'https://smoke2.example.com',
     })
-    check('website unique create → 201', created2.status === 201, `got ${created2.status}`)
+    check(
+      'website unique create → 201',
+      created2.status === 201,
+      `got ${created2.status}`,
+    )
     const wid2 = (await created2.json().catch(() => ({})))?.data?.id
 
     // Editing wid2 to collide with wid's name → 422.
@@ -167,19 +236,31 @@ async function main() {
       name: 'Smoke Site',
       url: 'https://smoke2.example.com',
     })
-    check('website edit collides with another name → 422', editCollide.status === 422, `got ${editCollide.status}`)
+    check(
+      'website edit collides with another name → 422',
+      editCollide.status === 422,
+      `got ${editCollide.status}`,
+    )
     // Editing wid2 to its OWN unchanged name+url → 200 (self excluded).
     const editSelf = await apiAt('PUT', `/pulse/websites/${wid2}`, {
       name: 'Smoke Site 2',
       url: 'https://smoke2.example.com',
     })
-    check('website edit to own values (self-exclusion) → 200', editSelf.status === 200, `got ${editSelf.status}`)
+    check(
+      'website edit to own values (self-exclusion) → 200',
+      editSelf.status === 200,
+      `got ${editSelf.status}`,
+    )
     // Clean up wid2 so it can't collide with the later edit-of-wid test.
     await apiAt('DELETE', `/pulse/websites/${wid2}`)
 
     // Cookie policy (About cookies) for the created website
     const cpGet0 = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
-    check('cookie policy GET → 200 (empty ok)', cpGet0.status === 200, `got ${cpGet0.status}`)
+    check(
+      'cookie policy GET → 200 (empty ok)',
+      cpGet0.status === 200,
+      `got ${cpGet0.status}`,
+    )
 
     // Website creation seeds a default cookie_policy (heading/description + today's date).
     const seedBody = await cpGet0.json().catch(() => ({}))
@@ -212,7 +293,11 @@ async function main() {
       `/pulse/websites/${wid}/cookie-policy/aboutCookies`,
       { heading: 'What are cookies?', description: 'Smoke test description.' },
     )
-    check('cookie policy PUT (aboutCookies) → 200', cpPut.status === 200, `got ${cpPut.status}`)
+    check(
+      'cookie policy PUT (aboutCookies) → 200',
+      cpPut.status === 200,
+      `got ${cpPut.status}`,
+    )
 
     // GET returns updatedAt (last edit/generate time), and it advances on a save — this is
     // what the rendered "Last updated" derives from (not render time).
@@ -222,7 +307,10 @@ async function main() {
       typeof u0 === 'string' && !Number.isNaN(Date.parse(u0)),
       `got ${JSON.stringify(u0)}`,
     )
-    const cpAfterEdit = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
+    const cpAfterEdit = await apiAt(
+      'GET',
+      `/pulse/websites/${wid}/cookie-policy`,
+    )
     const u1 = (await cpAfterEdit.json().catch(() => ({})))?.data?.updatedAt
     check(
       'updatedAt advances after a section save',
@@ -234,22 +322,44 @@ async function main() {
     const cpPutUse = await apiAt(
       'PUT',
       `/pulse/websites/${wid}/cookie-policy/useOfCookies`,
-      { heading: 'How do we use cookies?', description: 'Use section description.' },
+      {
+        heading: 'How do we use cookies?',
+        description: 'Use section description.',
+      },
     )
-    check('cookie policy PUT (useOfCookies) → 200', cpPutUse.status === 200, `got ${cpPutUse.status}`)
+    check(
+      'cookie policy PUT (useOfCookies) → 200',
+      cpPutUse.status === 200,
+      `got ${cpPutUse.status}`,
+    )
 
     // Third section + policy-level effective date (base-path PUT)
     const cpPutPref = await apiAt(
       'PUT',
       `/pulse/websites/${wid}/cookie-policy/cookiePreferences`,
-      { heading: 'Manage cookie preferences', description: 'Preferences description.' },
+      {
+        heading: 'Manage cookie preferences',
+        description: 'Preferences description.',
+      },
     )
-    check('cookie policy PUT (cookiePreferences) → 200', cpPutPref.status === 200, `got ${cpPutPref.status}`)
+    check(
+      'cookie policy PUT (cookiePreferences) → 200',
+      cpPutPref.status === 200,
+      `got ${cpPutPref.status}`,
+    )
 
-    const cpPutDate = await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy`, {
-      effectiveDate: '2026-07-07',
-    })
-    check('cookie policy PUT (effectiveDate) → 200', cpPutDate.status === 200, `got ${cpPutDate.status}`)
+    const cpPutDate = await apiAt(
+      'PUT',
+      `/pulse/websites/${wid}/cookie-policy`,
+      {
+        effectiveDate: '2026-07-07',
+      },
+    )
+    check(
+      'cookie policy PUT (effectiveDate) → 200',
+      cpPutDate.status === 200,
+      `got ${cpPutDate.status}`,
+    )
 
     const cpGet1 = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
     const cpBody = await cpGet1.json().catch(() => ({}))
@@ -263,7 +373,8 @@ async function main() {
     )
     check(
       'cookie policy persisted cookiePreferences.heading (3 sections coexist)',
-      cpBody?.data?.content?.cookiePreferences?.heading === 'Manage cookie preferences',
+      cpBody?.data?.content?.cookiePreferences?.heading ===
+        'Manage cookie preferences',
     )
     check(
       'cookie policy persisted effectiveDate (meta coexists with sections)',
@@ -285,11 +396,19 @@ async function main() {
       !cpBody?.data?.content?.generatedAt,
       `got ${JSON.stringify(cpBody?.data?.content?.generatedAt)}`,
     )
-    const cpGenerate = await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy`, {
-      effectiveDate: '2026-07-07',
-      generated: true,
-    })
-    check('cookie policy PUT (generated) → 200', cpGenerate.status === 200, `got ${cpGenerate.status}`)
+    const cpGenerate = await apiAt(
+      'PUT',
+      `/pulse/websites/${wid}/cookie-policy`,
+      {
+        effectiveDate: '2026-07-07',
+        generated: true,
+      },
+    )
+    check(
+      'cookie policy PUT (generated) → 200',
+      cpGenerate.status === 200,
+      `got ${cpGenerate.status}`,
+    )
     const cpGetGen = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
     const cpGenBody = await cpGetGen.json().catch(() => ({}))
     check(
@@ -304,7 +423,10 @@ async function main() {
       heading: 'What are cookies?',
       description: 'Edited after generate.',
     })
-    const afterSectionEdit = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
+    const afterSectionEdit = await apiAt(
+      'GET',
+      `/pulse/websites/${wid}/cookie-policy`,
+    )
     const aseBody = await afterSectionEdit.json().catch(() => ({}))
     check(
       'section save after generate clears generatedAt',
@@ -320,7 +442,10 @@ async function main() {
     await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy`, {
       effectiveDate: '2026-07-08',
     })
-    const afterMetaEdit = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
+    const afterMetaEdit = await apiAt(
+      'GET',
+      `/pulse/websites/${wid}/cookie-policy`,
+    )
     const ameBody = await afterMetaEdit.json().catch(() => ({}))
     check(
       'non-generate meta save clears generatedAt',
@@ -329,10 +454,17 @@ async function main() {
     )
 
     // HTML export ("HTML format" add-to-site option) — self-contained snippet.
-    const htmlRes = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy/html`)
+    const htmlRes = await apiAt(
+      'GET',
+      `/pulse/websites/${wid}/cookie-policy/html`,
+    )
     const htmlBody = await htmlRes.json().catch(() => ({}))
     const exportHtml = htmlBody?.data?.html
-    check('cookie policy HTML export → 200', htmlRes.status === 200, `got ${htmlRes.status}`)
+    check(
+      'cookie policy HTML export → 200',
+      htmlRes.status === 200,
+      `got ${htmlRes.status}`,
+    )
     check(
       'HTML export has policy h1 + a saved section heading + footer',
       typeof exportHtml === 'string' &&
@@ -344,41 +476,79 @@ async function main() {
       'GET',
       '/pulse/websites/00000000-0000-0000-0000-000000000000/cookie-policy/html',
     )
-    check('HTML export of non-owned website → 404', htmlNotOwned.status === 404, `got ${htmlNotOwned.status}`)
+    check(
+      'HTML export of non-owned website → 404',
+      htmlNotOwned.status === 404,
+      `got ${htmlNotOwned.status}`,
+    )
 
     // Send code to a teammate — validation + ownership only (NO live send, so no real
     // email is dispatched from the smoke run).
-    const sendBadEmail = await apiAt('POST', `/pulse/websites/${wid}/cookie-policy/send-code`, {
-      email: 'not-an-email',
-    })
-    check('send-code invalid email → 422', sendBadEmail.status === 422, `got ${sendBadEmail.status}`)
+    const sendBadEmail = await apiAt(
+      'POST',
+      `/pulse/websites/${wid}/cookie-policy/send-code`,
+      {
+        email: 'not-an-email',
+      },
+    )
+    check(
+      'send-code invalid email → 422',
+      sendBadEmail.status === 422,
+      `got ${sendBadEmail.status}`,
+    )
     // Valid email but non-owned website → passes validation, fails ownership before any send.
     const sendNotOwned = await apiAt(
       'POST',
       '/pulse/websites/00000000-0000-0000-0000-000000000000/cookie-policy/send-code',
       { email: 'teammate@example.com' },
     )
-    check('send-code of non-owned website → 404', sendNotOwned.status === 404, `got ${sendNotOwned.status}`)
+    check(
+      'send-code of non-owned website → 404',
+      sendNotOwned.status === 404,
+      `got ${sendNotOwned.status}`,
+    )
 
     const cpBad = await apiAt(
       'PUT',
       `/pulse/websites/${wid}/cookie-policy/nonsense`,
       { heading: 'x', description: 'y' },
     )
-    check('cookie policy unknown section → 404', cpBad.status === 404, `got ${cpBad.status}`)
+    check(
+      'cookie policy unknown section → 404',
+      cpBad.status === 404,
+      `got ${cpBad.status}`,
+    )
 
-    const cpBadDate = await apiAt('PUT', `/pulse/websites/${wid}/cookie-policy`, {
-      effectiveDate: 'not-a-date',
-    })
-    check('cookie policy invalid effectiveDate → 422', cpBadDate.status === 422, `got ${cpBadDate.status}`)
+    const cpBadDate = await apiAt(
+      'PUT',
+      `/pulse/websites/${wid}/cookie-policy`,
+      {
+        effectiveDate: 'not-a-date',
+      },
+    )
+    check(
+      'cookie policy invalid effectiveDate → 422',
+      cpBadDate.status === 422,
+      `got ${cpBadDate.status}`,
+    )
 
     const cpNotOwned = await apiAt(
       'GET',
       '/pulse/websites/00000000-0000-0000-0000-000000000000/cookie-policy',
     )
-    check('cookie policy of non-owned website → 404', cpNotOwned.status === 404, `got ${cpNotOwned.status}`)
+    check(
+      'cookie policy of non-owned website → 404',
+      cpNotOwned.status === 404,
+      `got ${cpNotOwned.status}`,
+    )
 
     // Image upload (multipart) → serve → reject non-image
+    /**
+     * Upload a file to the website's image endpoint as multipart/form-data with the cookie jar.
+     * @param {Blob} blob - File contents.
+     * @param {string} filename - Multipart filename.
+     * @returns {Promise<Response>} The upload fetch Response.
+     */
     async function uploadFile(blob, filename) {
       const fd = new FormData()
       fd.append('file', blob, filename)
@@ -395,6 +565,11 @@ async function main() {
     }
     // Image serve is authenticated + owner-scoped and now 302-redirects to a presigned S3
     // URL — send the cookie jar and DON'T follow the redirect (assert the 302 itself).
+    /**
+     * Fetch an image URL with the cookie jar, without following the presigned-URL redirect.
+     * @param {string} url - Image path under BASE (e.g. /pulse/images/<id>).
+     * @returns {Promise<Response>} The fetch Response (redirect:'manual', so a 302 is observable).
+     */
     function getImg(url) {
       const headers = {}
       const ck = Object.entries(jar)
@@ -427,7 +602,11 @@ async function main() {
 
     // No auth cookie → 401 (route is no longer public).
     const imgNoAuth = await fetch(BASE + imgUrl)
-    check('image serve without auth → 401', imgNoAuth.status === 401, `got ${imgNoAuth.status}`)
+    check(
+      'image serve without auth → 401',
+      imgNoAuth.status === 401,
+      `got ${imgNoAuth.status}`,
+    )
 
     // Cross-user: a different logged-in user cannot read this user's image → 404.
     const otherEmail = `smoke_other_${Date.now()}@example.com`
@@ -456,7 +635,11 @@ async function main() {
       const crossRes = await fetch(BASE + imgUrl, {
         headers: ock ? { Cookie: ock } : {},
       })
-      check("another user's image → 404", crossRes.status === 404, `got ${crossRes.status}`)
+      check(
+        "another user's image → 404",
+        crossRes.status === 404,
+        `got ${crossRes.status}`,
+      )
     } finally {
       await db.delete(users).where(eq(users.email, otherEmail))
     }
@@ -465,7 +648,11 @@ async function main() {
       new Blob(['not an image'], { type: 'text/plain' }),
       'x.txt',
     )
-    check('non-image upload rejected → 415', badUp.status === 415, `got ${badUp.status}`)
+    check(
+      'non-image upload rejected → 415',
+      badUp.status === 415,
+      `got ${badUp.status}`,
+    )
 
     // Orphan-image cleanup (reconcile on save). Save a section referencing image A →
     // A is kept; then save without it (and no usedImageIds) → A is swept.
@@ -474,11 +661,19 @@ async function main() {
       description: `<p>see <img src="${imgUrl}"></p>`,
     })
     const servedKept = await getImg(imgUrl)
-    check('image referenced in saved section is kept → 302', servedKept.status === 302, `got ${servedKept.status}`)
+    check(
+      'image referenced in saved section is kept → 302',
+      servedKept.status === 302,
+      `got ${servedKept.status}`,
+    )
 
     // HTML export inlines the referenced image as a base64 data URI (portable snippet).
-    const htmlWithImg = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy/html`)
-    const inlined = (await htmlWithImg.json().catch(() => ({})))?.data?.html || ''
+    const htmlWithImg = await apiAt(
+      'GET',
+      `/pulse/websites/${wid}/cookie-policy/html`,
+    )
+    const inlined =
+      (await htmlWithImg.json().catch(() => ({})))?.data?.html || ''
     check(
       'HTML export inlines image as base64 (no /pulse/images url left)',
       inlined.includes('data:image/png;base64,') && !inlined.includes(imgUrl),
@@ -490,7 +685,11 @@ async function main() {
       usedImageIds: [],
     })
     const servedGone = await getImg(imgUrl)
-    check('image removed from content is swept → 404', servedGone.status === 404, `got ${servedGone.status}`)
+    check(
+      'image removed from content is swept → 404',
+      servedGone.status === 404,
+      `got ${servedGone.status}`,
+    )
 
     // Protection: an image not yet in saved content but reported live via usedImageIds
     // (e.g. dropped into an unsaved sibling section) must NOT be deleted.
@@ -506,12 +705,23 @@ async function main() {
       usedImageIds: [imgBId],
     })
     const servedProtected = await getImg(imgBUrl)
-    check('image kept via usedImageIds (unsaved sibling) → 302', servedProtected.status === 302, `got ${servedProtected.status}`)
+    check(
+      'image kept via usedImageIds (unsaved sibling) → 302',
+      servedProtected.status === 302,
+      `got ${servedProtected.status}`,
+    )
 
     // "Delete" (reset) the policy → content restored to the default seed, all of
     // this policy's images swept, completedSections cleared.
-    const cpDelete = await apiAt('DELETE', `/pulse/websites/${wid}/cookie-policy`)
-    check('cookie policy delete (reset) → 200', cpDelete.status === 200, `got ${cpDelete.status}`)
+    const cpDelete = await apiAt(
+      'DELETE',
+      `/pulse/websites/${wid}/cookie-policy`,
+    )
+    check(
+      'cookie policy delete (reset) → 200',
+      cpDelete.status === 200,
+      `got ${cpDelete.status}`,
+    )
 
     const cpGet2 = await apiAt('GET', `/pulse/websites/${wid}/cookie-policy`)
     const cpBody2 = await cpGet2.json().catch(() => ({}))
@@ -537,13 +747,21 @@ async function main() {
       `got ${JSON.stringify(reset.completedSections)}`,
     )
     const servedAfterDelete = await getImg(imgBUrl)
-    check('delete sweeps the policy images → 404', servedAfterDelete.status === 404, `got ${servedAfterDelete.status}`)
+    check(
+      'delete sweeps the policy images → 404',
+      servedAfterDelete.status === 404,
+      `got ${servedAfterDelete.status}`,
+    )
 
     const cpDelNotOwned = await apiAt(
       'DELETE',
       '/pulse/websites/00000000-0000-0000-0000-000000000000/cookie-policy',
     )
-    check('cookie policy delete of non-owned website → 404', cpDelNotOwned.status === 404, `got ${cpDelNotOwned.status}`)
+    check(
+      'cookie policy delete of non-owned website → 404',
+      cpDelNotOwned.status === 404,
+      `got ${cpDelNotOwned.status}`,
+    )
 
     const wEdit = await apiAt('PUT', `/pulse/websites/${wid}`, {
       name: 'Smoke Site v2',
@@ -551,8 +769,15 @@ async function main() {
     })
     check('website edit → 200', wEdit.status === 200, `got ${wEdit.status}`)
 
-    const wBad = await apiAt('POST', '/pulse/websites', { name: '', url: 'nope' })
-    check('website invalid input → 422', wBad.status === 422, `got ${wBad.status}`)
+    const wBad = await apiAt('POST', '/pulse/websites', {
+      name: '',
+      url: 'nope',
+    })
+    check(
+      'website invalid input → 422',
+      wBad.status === 422,
+      `got ${wBad.status}`,
+    )
 
     const wDel = await apiAt('DELETE', `/pulse/websites/${wid}`)
     check('website delete → 200', wDel.status === 200, `got ${wDel.status}`)

@@ -17,9 +17,20 @@ import { resolveResetBase } from '../utils/resetBase.js'
 import { resolveVerifyBase } from '../utils/verifyBase.js'
 import { clearAuthCookies } from '../utils/cookies.js'
 import jwt from 'jsonwebtoken'
-// The per-user iat-cutoff key (`session:iat:<userId>`) lives as long as the refresh token could.
+
 const REFRESH_EXPIRY_SECONDS =
   Number(process.env.REFRESH_EXPIRY_SECONDS) || 604800
+/**
+ * Register a new user, hash their password, and email an email-verification link.
+ * @param {import('express').Request} req - The Express request.
+ * @param {object} req.body - Request body.
+ * @param {string} req.body.email - New user's email address.
+ * @param {string} req.body.password - New user's plaintext password (hashed before storage).
+ * @param {string} req.body.verifyBase - Client email-link base (validated against the allowlist).
+ * @param {import('express').Response} res - Sends 201 with an empty data envelope.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 409 - Email already exists.
+ */
 export const signup = asyncHandler(async (req, res) => {
   const { email, password, verifyBase } = req.body
   const base = resolveVerifyBase(verifyBase)
@@ -54,6 +65,15 @@ export const signup = asyncHandler(async (req, res) => {
       ),
     )
 })
+/**
+ * Verify a user's email from the token, mark them verified, and start a session by setting auth cookies.
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.params.token - Raw email-verification token from the URL.
+ * @param {import('express').Response} res - Sets accessToken/refreshToken cookies; sends 200.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 403 - Invalid token (no matching record).
+ * @throws {ApiError} 401 - Token expired or already used.
+ */
 export const verifyMail = asyncHandler(async (req, res) => {
   const { token } = req.params
   const hashedToken = hashToken(token)
@@ -102,6 +122,15 @@ export const verifyMail = asyncHandler(async (req, res) => {
     .cookie('refreshToken', refreshToken, options)
     .json(new ApiResponse(200, {}, 'verified'))
 })
+/**
+ * Email a password-reset link when the account exists, always responding 200 so account existence never leaks.
+ * @param {import('express').Request} req - The Express request.
+ * @param {object} req.body - Request body.
+ * @param {string} req.body.email - Account email to send the reset link to.
+ * @param {string} req.body.resetBase - Client email-link base (validated against the allowlist).
+ * @param {import('express').Response} res - Sends 200 with a generic message.
+ * @returns {Promise<void>}
+ */
 export const forgotPassword = asyncHandler(async (req, res) => {
   const { email, resetBase } = req.body
   const base = resolveResetBase(resetBase)
@@ -142,9 +171,28 @@ export const forgotPassword = asyncHandler(async (req, res) => {
       ),
     )
 })
+/**
+ * Confirm a password-reset token is valid without consuming it (the token is validated by upstream middleware).
+ * @param {import('express').Request} req - Unused; the token was validated by the tokenValidation middleware.
+ * @param {import('express').Response} res - Sends 200 with "valid".
+ * @returns {Promise<void>}
+ */
 export const checkResetToken = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, {}, 'valid'))
 })
+/**
+ * Reset the authenticated user's password to a new value and mark the reset token used.
+ * @param {import('express').Request} req - The Express request.
+ * @param {object} req.body - Request body.
+ * @param {string} req.body.newPassword - The new password.
+ * @param {string} req.body.confirmPassword - Must match newPassword.
+ * @param {string} req.body.email - Account email (must match the token's user).
+ * @param {string} req.user.id - User id set by the tokenValidation middleware.
+ * @param {string} req.user.token - Hashed reset token set by the tokenValidation middleware.
+ * @param {import('express').Response} res - Sends 200 on success.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 400 - Passwords don't match, user doesn't exist, new password equals the old one, or email mismatch.
+ */
 export const resetPassword = asyncHandler(async (req, res) => {
   const { newPassword, confirmPassword, email } = req.body
   if (newPassword != confirmPassword) {
@@ -176,6 +224,19 @@ export const resetPassword = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, {}, 'password updated sucessfully'))
 })
+/**
+ * Authenticate credentials, enforce per-account and per-IP lockout, and start a session by setting auth cookies.
+ * @param {import('express').Request} req - The Express request.
+ * @param {object} req.body - Request body.
+ * @param {string} req.body.email - Account email.
+ * @param {string} req.body.password - Account password.
+ * @param {string} req.ip - Client IP for the per-IP rate limiter.
+ * @param {import('express').Response} res - Sets accessToken/refreshToken cookies; sends 200.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 429 - Too many login attempts per IP, or account locked (retryAfter provided).
+ * @throws {ApiError} 401 - Invalid credentials.
+ * @throws {ApiError} 403 - Email not verified.
+ */
 export const login = asyncHandler(async (req, res) => {
   const MAX_ATTEMPTS = 5
   const MAX_IP_ATTEMPTS = 10
@@ -288,6 +349,16 @@ export const login = asyncHandler(async (req, res) => {
     .cookie('refreshToken', refreshToken, options)
     .json(new ApiResponse(200, {}, 'login sucessfull'))
 })
+/**
+ * Revoke the current session by deleting the refresh token, blacklisting the access token jti, and clearing cookies.
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.cookies.refreshToken - Refresh-token cookie (deleted from the Redis store).
+ * @param {number} req.user.exp - Access-token expiry (set by jwtValidation; used for the blacklist TTL).
+ * @param {string} req.user.jti - Access-token id to blacklist (set by jwtValidation).
+ * @param {import('express').Response} res - Clears auth cookies; sends 200.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 401 - Refresh token missing from the Redis store (invalid token).
+ */
 export const logout = asyncHandler(async (req, res) => {
   const { refreshToken } = req.cookies
   const token = await redisClient.get(`refresh:${refreshToken}`)
@@ -301,6 +372,14 @@ export const logout = asyncHandler(async (req, res) => {
   clearAuthCookies(res)
   return res.status(200).json(new ApiResponse(200, {}, 'logout sucessful'))
 })
+/**
+ * Rotate the refresh token: verify it, enforce the session iat cutoff, and issue a fresh access+refresh pair.
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.cookies.refreshToken - Refresh-token cookie to rotate.
+ * @param {import('express').Response} res - Sets new accessToken/refreshToken cookies; sends 200.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 401 - Refresh token missing, invalid, or issued before the session cutoff (session invalidated).
+ */
 export const rotateToken = asyncHandler(async (req, res) => {
   const { refreshToken } = req.cookies
   if (!refreshToken) {
@@ -336,6 +415,18 @@ export const rotateToken = asyncHandler(async (req, res) => {
     .cookie('refreshToken', refresh, options)
     .json(new ApiResponse(200, {}, 'token rotated sucessfully'))
 })
+/**
+ * Change the authenticated user's password and invalidate all existing sessions by bumping the iat cutoff.
+ * @param {import('express').Request} req - The Express request.
+ * @param {object} req.body - Request body.
+ * @param {string} req.body.oldPassword - Current password.
+ * @param {string} req.body.newPassword - The new password.
+ * @param {string} req.body.confirmPassword - Must match newPassword.
+ * @param {string} req.user.id - Authenticated user id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 on success.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 400 - Old password mismatch, new/confirm mismatch, or new password equals the old one.
+ */
 export const changePassword = asyncHandler(async (req, res) => {
   const { oldPassword, newPassword, confirmPassword } = req.body
   const [user] = await db
@@ -369,12 +460,30 @@ export const changePassword = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, {}, 'password reseted sucessfully'))
 })
+/**
+ * Return the authenticated user's email, confirming the session is valid.
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.user.email - Authenticated user's email (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 with the email as data.
+ * @returns {Promise<void>}
+ */
 export const me = asyncHandler(async (req, res) => {
   const { email } = req.user
   return res
     .status(200)
     .json(new ApiResponse(200, email, 'user authenticated sucessfully'))
 })
+/**
+ * Re-issue an email-verification token and resend the verification email to the authenticated user.
+ * @param {import('express').Request} req - The Express request.
+ * @param {object} [req.body] - Request body.
+ * @param {string} [req.body.verifyBase] - Client email-link base (validated against the allowlist).
+ * @param {string} req.user.id - Authenticated user id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 on success.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 400 - User doesn't exist.
+ * @throws {ApiError} 409 - Email already verified.
+ */
 export const resendVerification = asyncHandler(async (req, res) => {
   const id = req.user.id
   const base = resolveVerifyBase(req.body?.verifyBase)
@@ -401,6 +510,16 @@ export const resendVerification = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, {}, 'A new verification email has been sent.'))
 })
+/**
+ * Re-issue a password-reset token and resend the reset email to the authenticated user.
+ * @param {import('express').Request} req - The Express request.
+ * @param {object} [req.body] - Request body.
+ * @param {string} [req.body.resetBase] - Client email-link base (validated against the allowlist).
+ * @param {string} req.user.id - Authenticated user id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 on success.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 400 - User doesn't exist.
+ */
 export const resetResend = asyncHandler(async (req, res) => {
   const id = req.user.id
   const base = resolveResetBase(req.body?.resetBase)

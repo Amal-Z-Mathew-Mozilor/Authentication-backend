@@ -16,10 +16,22 @@ import { renderPolicyHtml, todayISO } from '../utils/policyHtml.js'
 import { sendEmail, policyInstallEmail } from '../utils/mail.js'
 import { getObjectBuffer } from '../utils/s3.js'
 
+/**
+ * Fetch a website's saved cookie policy content plus its last-updated timestamp.
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.params.websiteId - Owning website id.
+ * @param {string} req.user.id - Authenticated user id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 with { content, updatedAt }.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 404 - Website does not exist or is not owned by the user.
+ */
 export const getCookiePolicy = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
   const [row] = await db
-    .select({ content: cookiePolicy.content, updatedAt: cookiePolicy.updatedAt })
+    .select({
+      content: cookiePolicy.content,
+      updatedAt: cookiePolicy.updatedAt,
+    })
     .from(cookiePolicy)
     .where(eq(cookiePolicy.websiteId, req.params.websiteId))
   const content = row?.content || {}
@@ -28,7 +40,11 @@ export const getCookiePolicy = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(
-      new ApiResponse(200, { content, updatedAt }, 'cookie policy fetched sucessfully'),
+      new ApiResponse(
+        200,
+        { content, updatedAt },
+        'cookie policy fetched sucessfully',
+      ),
     )
 })
 
@@ -37,6 +53,11 @@ export const getCookiePolicy = asyncHandler(async (req, res) => {
 // URI so the snippet is portable (the /pulse/images URL wouldn't resolve on a foreign
 // host). Shared by the "HTML format" export and the "send code to a teammate" email so
 // the two are byte-identical. Assumes ownership was already asserted by the caller.
+/**
+ * Render a website's saved policy as a self-contained HTML snippet with every referenced image inlined as a base64 data URI.
+ * @param {string} websiteId - The owning website id (ownership must already be asserted by the caller).
+ * @returns {Promise<{ html: string, url: string }>} The rendered snippet and the website url.
+ */
 async function buildPolicyHtml(websiteId) {
   // Website url — used in the footer ("Cookie Policy generated for <url>").
   const [site] = await db
@@ -97,17 +118,43 @@ async function buildPolicyHtml(websiteId) {
 }
 
 // The "HTML format" export: the owner pastes the snippet onto their own site. Owner-scoped.
+/**
+ * Return the saved cookie policy as a self-contained HTML snippet for the "HTML format" export.
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.params.websiteId - Owning website id.
+ * @param {string} req.user.id - Authenticated user id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 with { html }.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 404 - Website does not exist or is not owned by the user.
+ */
 export const getCookiePolicyHtml = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
   const { html } = await buildPolicyHtml(req.params.websiteId)
   return res
     .status(200)
-    .json(new ApiResponse(200, { html }, 'cookie policy html generated sucessfully'))
+    .json(
+      new ApiResponse(
+        200,
+        { html },
+        'cookie policy html generated sucessfully',
+      ),
+    )
 })
 
 // "Send code to a teammate": email the SAME snippet to a teammate so they can add it to
 // the site. Owner-scoped; email validated by sendCodeValidator. sendEmail swallows
 // transport errors (logs, never throws) — a mail outage does not 500 the request.
+/**
+ * Email the policy's install snippet to a teammate; mail-transport errors are swallowed so a mail outage still returns 200.
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.params.websiteId - Owning website id.
+ * @param {object} req.body - Request body.
+ * @param {string} req.body.email - Teammate's email address to send the install snippet to (validated).
+ * @param {string} req.user.id - Authenticated user id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 on success.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 404 - Website does not exist or is not owned by the user.
+ */
 export const sendPolicyCode = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
   const { html, url } = await buildPolicyHtml(req.params.websiteId)
@@ -118,6 +165,20 @@ export const sendPolicyCode = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, 'installation code sent sucessfully'))
 })
 
+/**
+ * Upsert one cookie-policy section into the content jsonb, track completion, and sweep now-orphaned images.
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.params.websiteId - Owning website id.
+ * @param {string} req.params.section - Section key (allowlisted: aboutCookies|useOfCookies|cookiePreferences).
+ * @param {object} req.body - Request body.
+ * @param {string} [req.body.heading] - Section heading text (defaults to '').
+ * @param {string} [req.body.description] - Section rich-text HTML (defaults to '').
+ * @param {string[]} [req.body.usedImageIds] - Image ids still on screen; kept from the orphan sweep.
+ * @param {string} req.user.id - Authenticated user id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 with the merged { content }.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 404 - Unknown cookie policy section, or website not owned by the user.
+ */
 export const putSection = asyncHandler(async (req, res) => {
   const { section } = req.params
   if (!SECTIONS.includes(section))
@@ -173,7 +234,9 @@ export const putSection = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { content }, 'cookie policy updated sucessfully'))
+    .json(
+      new ApiResponse(200, { content }, 'cookie policy updated sucessfully'),
+    )
 })
 
 // "Delete" the policy — reset its content to the default seed (the same state a
@@ -183,6 +246,15 @@ export const putSection = asyncHandler(async (req, res) => {
 // invariant and lets "Create new cookie policy" reopen the wizard on the default
 // template. (Deleting the website itself still hard-removes the row via the FK
 // cascade.)
+/**
+ * Reset a website's cookie policy to the default seed content and delete all of its images.
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.params.websiteId - Owning website id.
+ * @param {string} req.user.id - Authenticated user id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 with the default { content }.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 404 - Website does not exist or is not owned by the user.
+ */
 export const deleteCookiePolicy = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
   const today = new Date().toISOString().slice(0, 10)
@@ -214,11 +286,26 @@ export const deleteCookiePolicy = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { content }, 'cookie policy deleted sucessfully'))
+    .json(
+      new ApiResponse(200, { content }, 'cookie policy deleted sucessfully'),
+    )
 })
 
 // Policy-level metadata (not a section) — currently the effective date. Stored as a
 // top-level key in the same content jsonb, merge-upserted so sections are preserved.
+/**
+ * Upsert policy-level metadata (effectiveDate, optional generatedAt) into the content jsonb and sweep orphaned images.
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.params.websiteId - Owning website id.
+ * @param {object} req.body - Request body.
+ * @param {string} [req.body.effectiveDate] - Policy effective date, ISO YYYY-MM-DD (defaults to '').
+ * @param {boolean} [req.body.generated] - When true, stamp generatedAt = now (the "Generate cookie policy" action).
+ * @param {string[]} [req.body.usedImageIds] - Image ids still on screen; kept from the orphan sweep.
+ * @param {string} req.user.id - Authenticated user id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 with the merged { content }.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 404 - Website does not exist or is not owned by the user.
+ */
 export const putPolicyMeta = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
   const { effectiveDate = '', generated } = req.body
@@ -265,5 +352,7 @@ export const putPolicyMeta = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { content }, 'cookie policy updated sucessfully'))
+    .json(
+      new ApiResponse(200, { content }, 'cookie policy updated sucessfully'),
+    )
 })

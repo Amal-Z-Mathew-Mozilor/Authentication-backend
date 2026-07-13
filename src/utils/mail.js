@@ -2,6 +2,12 @@ import Mailgen from 'mailgen'
 import nodemailer from 'nodemailer'
 import 'dotenv/config'
 import { escapeHtml } from './policyHtml.js'
+/**
+ * Build the Mailgen email body for the account email-verification message.
+ * @param {string} username - Recipient name shown in the greeting.
+ * @param {string} verificationurl - Link the verify button points to.
+ * @returns {object} A Mailgen emailContent object ({ body: {…} }).
+ */
 const emailVerification = (username, verificationurl) => {
   return {
     body: {
@@ -20,6 +26,12 @@ const emailVerification = (username, verificationurl) => {
     },
   }
 }
+/**
+ * Build the Mailgen email body for the password-reset verification message.
+ * @param {string} username - Recipient name shown in the greeting.
+ * @param {string} verificationurl - Link the verify button points to.
+ * @returns {object} A Mailgen emailContent object ({ body: {…} }).
+ */
 const passwordResetVerification = (username, verificationurl) => {
   return {
     body: {
@@ -43,6 +55,12 @@ const passwordResetVerification = (username, verificationurl) => {
 // can't express an embedded code block, so this is a hand-built template (sendEmail
 // sends it via the raw-html path below). The snippet is HTML-escaped so it renders as
 // visible text and never executes in the recipient's mail client.
+/**
+ * Build a self-contained "add the cookie policy" email that embeds the install snippet as escaped code.
+ * @param {string} url - The teammate's website URL (shown in subject/body; falls back to "your website").
+ * @param {string} snippetHtml - The policy HTML snippet, HTML-escaped so it renders as visible text.
+ * @returns {{ subject: string, html: string, text: string }} Ready-to-send raw email payload.
+ */
 const policyInstallEmail = (url, snippetHtml) => {
   const safeUrl = escapeHtml(url || 'your website')
   const subject = `Add the cookie policy to ${url || 'your website'}`
@@ -80,6 +98,17 @@ Need help? If you face any issues, feel free to contact us and we'll help you.`
   return { subject, html, text }
 }
 
+/**
+ * Send an email via nodemailer, either as a raw html/text payload or a themed Mailgen body.
+ * Transport errors are caught and logged, never thrown (a mail outage must not fail the request).
+ * @param {object} options - Email options.
+ * @param {string} options.email - Recipient address.
+ * @param {string} options.subject - Email subject line.
+ * @param {string} [options.html] - Raw HTML body; when present, text/html are sent as-is.
+ * @param {string} [options.text] - Raw plaintext body (used with options.html).
+ * @param {object} [options.emailContent] - Mailgen content, themed when no raw html is given.
+ * @returns {Promise<void>}
+ */
 const sendEmail = async function (options) {
   // Two paths: a raw html/text payload (e.g. policyInstallEmail) is sent as-is; otherwise
   // a Mailgen `emailContent` body is themed (the verification/reset emails).

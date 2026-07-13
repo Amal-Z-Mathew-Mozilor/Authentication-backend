@@ -13,6 +13,15 @@ import { defaultCookieContent } from '../utils/defaultCookiePolicy.js'
 // keeps the user's original text. On a collision, throw a 422 in the express-validator
 // shape ({ path, msg }) so the frontend renders it inline under the offending field.
 // `excludeId` skips the row being edited (so a website may keep its own name/url).
+/**
+ * Assert a website name and url are each unique among the user's own websites (normalized compare).
+ * @param {string} userId - Authenticated req.user.id.
+ * @param {string} name - Candidate website name.
+ * @param {string} url - Candidate website url.
+ * @param {string|null} [excludeId=null] - Row id to skip (the website being edited).
+ * @returns {Promise<void>}
+ * @throws {ApiError} 422 - Name or url already taken (errors: [{ path, msg }]).
+ */
 async function assertNoDuplicate(userId, name, url, excludeId = null) {
   const n = (name || '').trim().toLowerCase()
   const u = (url || '').trim().toLowerCase().replace(/\/+$/, '')
@@ -26,17 +35,28 @@ async function assertNoDuplicate(userId, name, url, excludeId = null) {
   for (const row of rows) {
     if (excludeId && row.id === excludeId) continue
     if ((row.name || '').trim().toLowerCase() === n) nameTaken = true
-    if ((row.url || '').trim().toLowerCase().replace(/\/+$/, '') === u) urlTaken = true
+    if ((row.url || '').trim().toLowerCase().replace(/\/+$/, '') === u)
+      urlTaken = true
   }
 
   const errors = []
   if (nameTaken)
-    errors.push({ path: 'name', msg: 'A website with this name already exists' })
+    errors.push({
+      path: 'name',
+      msg: 'A website with this name already exists',
+    })
   if (urlTaken)
     errors.push({ path: 'url', msg: 'A website with this URL already exists' })
   if (errors.length) throw new ApiError(422, 'Validation failed', errors)
 }
 
+/**
+ * List the authenticated user's websites, newest first.
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.user.id - Authenticated user id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 with the website rows.
+ * @returns {Promise<void>}
+ */
 export const listWebsites = asyncHandler(async (req, res) => {
   const rows = await db
     .select({
@@ -54,6 +74,17 @@ export const listWebsites = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, rows, 'websites fetched sucessfully'))
 })
 
+/**
+ * Create a website for the authenticated user and seed its default cookie_policy row in one transaction.
+ * @param {import('express').Request} req - The Express request.
+ * @param {object} req.body - Request body.
+ * @param {string} req.body.name - Website name (unique per user).
+ * @param {string} req.body.url - Website url (unique per user).
+ * @param {string} req.user.id - Authenticated owner id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 201 with the created website.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 422 - Duplicate name or url for this user (errors: [{ path, msg }]).
+ */
 export const createWebsite = asyncHandler(async (req, res) => {
   const { name, url } = req.body
   // Reject a duplicate name/url for this user before creating anything.
@@ -82,6 +113,19 @@ export const createWebsite = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, website, 'website added sucessfully'))
 })
 
+/**
+ * Update the authenticated user's website name and url.
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.params.id - Website id to update.
+ * @param {object} req.body - Request body.
+ * @param {string} req.body.name - New website name (unique per user).
+ * @param {string} req.body.url - New website url (unique per user).
+ * @param {string} req.user.id - Authenticated owner id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 with the updated website.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 422 - Duplicate name or url for this user (errors: [{ path, msg }]).
+ * @throws {ApiError} 404 - Website not found or not owned by the user.
+ */
 export const updateWebsite = asyncHandler(async (req, res) => {
   const { name, url } = req.body
   // Reject collisions with the user's OTHER websites; the row being edited is excluded so
@@ -90,7 +134,9 @@ export const updateWebsite = asyncHandler(async (req, res) => {
   const [website] = await db
     .update(websites)
     .set({ name, url })
-    .where(and(eq(websites.id, req.params.id), eq(websites.userId, req.user.id)))
+    .where(
+      and(eq(websites.id, req.params.id), eq(websites.userId, req.user.id)),
+    )
     .returning({
       id: websites.id,
       name: websites.name,
@@ -105,10 +151,21 @@ export const updateWebsite = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, website, 'website updated sucessfully'))
 })
 
+/**
+ * Delete the authenticated user's website by id.
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.params.id - Website id to delete.
+ * @param {string} req.user.id - Authenticated owner id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 on success.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 404 - Website not found or not owned by the user.
+ */
 export const deleteWebsite = asyncHandler(async (req, res) => {
   const [website] = await db
     .delete(websites)
-    .where(and(eq(websites.id, req.params.id), eq(websites.userId, req.user.id)))
+    .where(
+      and(eq(websites.id, req.params.id), eq(websites.userId, req.user.id)),
+    )
     .returning({ id: websites.id })
   if (!website) {
     throw new ApiError(404, 'website not found')

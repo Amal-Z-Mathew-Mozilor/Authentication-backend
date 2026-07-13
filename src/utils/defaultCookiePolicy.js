@@ -29,6 +29,11 @@ export const DEFAULT_COOKIE_SECTIONS = {
 }
 
 // Full seed content: the three default sections plus the policy-level effective date.
+/**
+ * Build the full default policy seed: the three default sections plus the effective date.
+ * @param {string} effectiveDate - Policy effective date (ISO YYYY-MM-DD, server "today").
+ * @returns {object} Seed content { ...DEFAULT_COOKIE_SECTIONS, effectiveDate }.
+ */
 export function defaultCookieContent(effectiveDate) {
   return { ...DEFAULT_COOKIE_SECTIONS, effectiveDate }
 }

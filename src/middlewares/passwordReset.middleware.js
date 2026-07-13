@@ -3,6 +3,17 @@ import { passwordReset } from '../models/index.js'
 import { hashToken, tokenGeneration } from '../utils/token.js'
 import ApiError from '../utils/api-error.js'
 import { eq } from 'drizzle-orm'
+/**
+ * Validate an active password-reset token (exists, not expired, not used) before reset.
+ * On success attaches req.user = { id, token: hashedToken } and calls next().
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.params.token - Raw reset token from the URL (hashed, then looked up in password_reset).
+ * @param {import('express').Response} res - Unused.
+ * @param {import('express').NextFunction} next - Called on success.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 403 - No password_reset row matches the token.
+ * @throws {ApiError} 401 - Token expired or already used.
+ */
 export const tokenValidation = async function (req, res, next) {
   const { token } = req.params
   const hashedToken = hashToken(token)

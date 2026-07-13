@@ -2,6 +2,17 @@ import { redisClient } from '../db/redis.js'
 import ApiError from '../utils/api-error.js'
 import { verifyAccess } from '../utils/jwt.js'
 import { clearAuthCookies } from '../utils/cookies.js'
+/**
+ * Verify the accessToken cookie and reject revoked/expired/invalidated sessions.
+ * On success attaches req.user = decoded token payload and calls next().
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.cookies.accessToken - Access-token cookie to verify.
+ * @param {import('express').Response} res - Used to clear auth cookies on session invalidation.
+ * @param {import('express').NextFunction} next - Called on success.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 401 - Missing token, expired/invalid token, or session invalidated (iat before cutoff).
+ * @throws {ApiError} 403 - Token revoked (jti blacklisted in Redis).
+ */
 export const jwtValidation = async function (req, res, next) {
   const { accessToken } = req.cookies
   if (!accessToken) {

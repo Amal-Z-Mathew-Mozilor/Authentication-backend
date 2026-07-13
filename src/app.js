@@ -36,6 +36,14 @@ app.use(cookieParser())
 app.use('/pulse/users', user_route)
 app.use('/pulse/websites', website_route)
 app.use('/pulse/images', image_route)
+/**
+ * Global error handler — map a thrown ApiError (or any error) to the JSON error envelope.
+ * @param {Error & { statuscode?: number, error?: Array }} err - Error propagated from a route/asyncHandler; statuscode and error are read when present.
+ * @param {import('express').Request} req - Incoming request (unused).
+ * @param {import('express').Response} res - Sends err.statuscode||500 with { success:false, message, errors }.
+ * @param {import('express').NextFunction} next - Express next (unused; required for the 4-arg error signature).
+ * @returns {void}
+ */
 app.use((err, req, res, next) => {
   const status = err.statuscode || 500
   res.status(status).json({

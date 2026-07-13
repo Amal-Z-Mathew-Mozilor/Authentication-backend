@@ -25,7 +25,13 @@ import { imageUpload } from '../middlewares/upload.middleware.js'
 import { uploadImage } from '../controllers/image.controller.js'
 export const website_route = express.Router()
 website_route.get('/', jwtValidation, listWebsites)
-website_route.post('/', jwtValidation, websiteValidator(), validation, createWebsite)
+website_route.post(
+  '/',
+  jwtValidation,
+  websiteValidator(),
+  validation,
+  createWebsite,
+)
 website_route.put(
   '/:id',
   jwtValidation,
