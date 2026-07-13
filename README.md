@@ -1,8 +1,10 @@
 # Pulse — Backend
 
-Authentication API for Pulse: **Express 5**, **Postgres** (Drizzle ORM), **Redis**, JWT httpOnly
-cookie auth, and email verification / password-reset flows. The React client lives in a separate
-repo (`../frontend`).
+API for Pulse: **Express 5**, **Postgres** (Drizzle ORM), **Redis**, JWT httpOnly cookie auth, and
+email verification / password-reset flows. On top of auth it powers the **cookie-consent** product:
+per-user **websites**, a **cookie policy** per website (a section-based editor with rich text and
+image uploads), and one-click **HTML export / email** of the finished policy. Uploaded images are
+stored in **Amazon S3**. The React client lives in a separate repo (`../frontend`).
 
 > Deeper architecture notes for contributors are in [`CLAUDE.md`](./CLAUDE.md); the full HTTP
 > contract is in [`openapi.yaml`](./openapi.yaml).
@@ -22,6 +24,10 @@ Then edit `.env`:
 
 - Generate the two JWT secrets: `openssl rand -hex 32` (must **not** contain a `$`).
 - Fill in your SMTP credentials (`MAIL_*`) — e.g. a [Mailtrap](https://mailtrap.io) sandbox inbox.
+- Fill in the **AWS / S3** vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`,
+  `S3_BUCKET`) — cookie-policy image uploads are stored in a **private** S3 bucket. `S3_BUCKET` is
+  the bare bucket name and `AWS_REGION` the region code (e.g. `ap-south-1`); the IAM creds need
+  `s3:PutObject`/`GetObject`/`DeleteObject`. (`S3_ENDPOINT` is only for LocalStack/MinIO.)
 - Leave `DATABASE_URL` / `REDIS_URL` as-is for the Docker path (Compose overrides them internally).
 
 `.env` is gitignored — never commit real secrets. `.env.example` is the shared template.
@@ -34,11 +40,11 @@ docker compose up --build
 
 This starts three services (defined in [`compose.yaml`](./compose.yaml)):
 
-| Service | What | Host port |
-|---------|------|-----------|
-| `db` | Postgres 17 | `5434` → 5432 |
-| `redis` | Redis 8 | `6379` |
-| `backend` | the API (Node 22) | `8000` |
+| Service   | What              | Host port     |
+| --------- | ----------------- | ------------- |
+| `db`      | Postgres 17       | `5434` → 5432 |
+| `redis`   | Redis 8           | `6379`        |
+| `backend` | the API (Node 22) | `8000`        |
 
 The `backend` service waits for the db/redis healthchecks, then **auto-runs `drizzle-kit push`**
 (creates the tables on first boot) before starting the server. The API is then at
@@ -69,8 +75,17 @@ node src/app.js          # start on http://localhost:8000
 
 ## API
 
-All routes are under **`/pulse/users`**. See [`openapi.yaml`](./openapi.yaml) for the complete
-spec. Auth uses **httpOnly cookies** (`accessToken`, `refreshToken`) — clients must send
+Routes are grouped by resource — see [`openapi.yaml`](./openapi.yaml) for the complete spec:
+
+- **`/pulse/users`** — auth (signup, verify, login/logout, password reset, token rotation, `me`).
+- **`/pulse/websites`** — per-user website CRUD, each seeded with a default cookie policy on create.
+- **`/pulse/websites/:id/cookie-policy`** — the cookie policy for a website: read the content, upsert
+  a section or the policy meta (effective date), `GET .../html` for a self-contained HTML snippet,
+  `POST .../send-code` to email that snippet to a teammate, and `DELETE` to reset it to defaults.
+- **`/pulse/websites/:id/images`** + **`/pulse/images/:id`** — upload (png/jpeg → S3) and serve
+  cookie-policy images; serving is authenticated and owner-scoped.
+
+Auth uses **httpOnly cookies** (`accessToken`, `refreshToken`) — clients must send
 `credentials: 'include'`. The frontend proxies `/pulse` → this server.
 
 ## Common commands
