@@ -1,9 +1,9 @@
-import db from '../db/index.js'
 import ApiError from '../utils/api-error.js'
 import ApiResponse from '../utils/api-response.js'
-import { cookiePolicy, websites, policyImages } from '../models/index.js'
+import * as cookiePolicyRepository from '../repositories/cookiePolicy.repository.js'
+import * as websiteRepository from '../repositories/website.repository.js'
+import * as policyImageRepository from '../repositories/policyImage.repository.js'
 import { asyncHandler } from '../utils/async-handler.js'
-import { and, eq, inArray } from 'drizzle-orm'
 import {
   SECTIONS,
   imageIdsFrom,
@@ -27,13 +27,9 @@ import { getObjectBuffer } from '../utils/s3.js'
  */
 export const getCookiePolicy = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
-  const [row] = await db
-    .select({
-      content: cookiePolicy.content,
-      updatedAt: cookiePolicy.updatedAt,
-    })
-    .from(cookiePolicy)
-    .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+  const [row] = await cookiePolicyRepository.findContentByWebsiteId(
+    req.params.websiteId,
+  )
   const content = row?.content || {}
   // updatedAt (last edit/generate) — used by the client to show an accurate "Last updated".
   const updatedAt = row?.updatedAt || null
@@ -60,19 +56,9 @@ export const getCookiePolicy = asyncHandler(async (req, res) => {
  */
 async function buildPolicyHtml(websiteId) {
   // Website url — used in the footer ("Cookie Policy generated for <url>").
-  const [site] = await db
-    .select({ url: websites.url })
-    .from(websites)
-    .where(eq(websites.id, websiteId))
+  const [site] = await websiteRepository.findUrlById(websiteId)
 
-  const [row] = await db
-    .select({
-      id: cookiePolicy.id,
-      content: cookiePolicy.content,
-      updatedAt: cookiePolicy.updatedAt,
-    })
-    .from(cookiePolicy)
-    .where(eq(cookiePolicy.websiteId, websiteId))
+  const [row] = await cookiePolicyRepository.findByWebsiteId(websiteId)
   const content = row?.content || {}
   // Last edit/generate date for the "Last updated" line (YYYY-MM-DD; not render time).
   const lastUpdated = row?.updatedAt
@@ -86,19 +72,7 @@ async function buildPolicyHtml(websiteId) {
   const imagesById = {}
   const ids = [...imageIdsFrom(JSON.stringify(content))]
   if (row?.id && ids.length) {
-    const imgs = await db
-      .select({
-        id: policyImages.id,
-        key: policyImages.key,
-        mime: policyImages.mime,
-      })
-      .from(policyImages)
-      .where(
-        and(
-          eq(policyImages.cookiePolicyId, row.id),
-          inArray(policyImages.id, ids),
-        ),
-      )
+    const imgs = await policyImageRepository.findByPolicyAndIds(row.id, ids)
     for (const img of imgs) {
       try {
         const buf = await getObjectBuffer(img.key)
@@ -188,10 +162,9 @@ export const putSection = asyncHandler(async (req, res) => {
   const { heading = '', description = '' } = req.body
   const sectionData = { heading, description }
 
-  const [existing] = await db
-    .select({ id: cookiePolicy.id, content: cookiePolicy.content })
-    .from(cookiePolicy)
-    .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+  const [existing] = await cookiePolicyRepository.findIdAndContentByWebsiteId(
+    req.params.websiteId,
+  )
 
   // A section counts as completed once it has been saved — server-derived (never
   // client-sent), persisted in the same jsonb so progress survives reload/resume.
@@ -203,10 +176,10 @@ export const putSection = asyncHandler(async (req, res) => {
   let policyId
   if (!existing) {
     content = { [section]: sectionData, completedSections }
-    const [ins] = await db
-      .insert(cookiePolicy)
-      .values({ websiteId: req.params.websiteId, content })
-      .returning({ id: cookiePolicy.id })
+    const [ins] = await cookiePolicyRepository.create({
+      websiteId: req.params.websiteId,
+      content,
+    })
     policyId = ins.id
   } else {
     // Merge: preserve sibling sections, upsert only this one.
@@ -219,10 +192,10 @@ export const putSection = asyncHandler(async (req, res) => {
     // generated snapshot, so drop generatedAt. Clicking "Cookie policy" then reopens the
     // wizard (needs re-generation). The Generate action re-stamps it afterwards.
     delete content.generatedAt
-    await db
-      .update(cookiePolicy)
-      .set({ content })
-      .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+    await cookiePolicyRepository.updateContentByWebsiteId(
+      req.params.websiteId,
+      content,
+    )
     policyId = existing.id
   }
 
@@ -260,23 +233,22 @@ export const deleteCookiePolicy = asyncHandler(async (req, res) => {
   const today = new Date().toISOString().slice(0, 10)
   const content = defaultCookieContent(today)
 
-  const [existing] = await db
-    .select({ id: cookiePolicy.id })
-    .from(cookiePolicy)
-    .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+  const [existing] = await cookiePolicyRepository.findIdByWebsiteId(
+    req.params.websiteId,
+  )
 
   let policyId
   if (!existing) {
-    const [ins] = await db
-      .insert(cookiePolicy)
-      .values({ websiteId: req.params.websiteId, content })
-      .returning({ id: cookiePolicy.id })
+    const [ins] = await cookiePolicyRepository.create({
+      websiteId: req.params.websiteId,
+      content,
+    })
     policyId = ins.id
   } else {
-    await db
-      .update(cookiePolicy)
-      .set({ content })
-      .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+    await cookiePolicyRepository.updateContentByWebsiteId(
+      req.params.websiteId,
+      content,
+    )
     policyId = existing.id
   }
 
@@ -317,19 +289,18 @@ export const putPolicyMeta = asyncHandler(async (req, res) => {
   const genStamp =
     generated === true ? { generatedAt: new Date().toISOString() } : {}
 
-  const [existing] = await db
-    .select({ id: cookiePolicy.id, content: cookiePolicy.content })
-    .from(cookiePolicy)
-    .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+  const [existing] = await cookiePolicyRepository.findIdAndContentByWebsiteId(
+    req.params.websiteId,
+  )
 
   let content
   let policyId
   if (!existing) {
     content = { effectiveDate, ...genStamp }
-    const [ins] = await db
-      .insert(cookiePolicy)
-      .values({ websiteId: req.params.websiteId, content })
-      .returning({ id: cookiePolicy.id })
+    const [ins] = await cookiePolicyRepository.create({
+      websiteId: req.params.websiteId,
+      content,
+    })
     policyId = ins.id
   } else {
     content = { ...(existing.content || {}), effectiveDate, ...genStamp }
@@ -337,10 +308,10 @@ export const putPolicyMeta = asyncHandler(async (req, res) => {
     // dashboard reopens the wizard. The Generate action (generated === true) re-stamps it
     // via genStamp above.
     if (generated !== true) delete content.generatedAt
-    await db
-      .update(cookiePolicy)
-      .set({ content })
-      .where(eq(cookiePolicy.websiteId, req.params.websiteId))
+    await cookiePolicyRepository.updateContentByWebsiteId(
+      req.params.websiteId,
+      content,
+    )
     policyId = existing.id
   }
 

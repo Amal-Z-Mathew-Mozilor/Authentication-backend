@@ -1,8 +1,6 @@
-import db from '../db/index.js'
-import { emailVerify } from '../models/index.js'
 import { hashToken } from '../utils/token.js'
 import ApiError from '../utils/api-error.js'
-import { eq } from 'drizzle-orm'
+import * as emailVerificationRepository from '../repositories/emailVerification.repository.js'
 import { asyncHandler } from '../utils/async-handler.js'
 
 // Resolves an email-verification token (from the URL) to its userId so the resend
@@ -21,10 +19,7 @@ import { asyncHandler } from '../utils/async-handler.js'
 export const emailTokenValidation = asyncHandler(async (req, res, next) => {
   const { token } = req.params
   const hashedToken = hashToken(token)
-  const [row] = await db
-    .select({ userId: emailVerify.userId })
-    .from(emailVerify)
-    .where(eq(emailVerify.token, hashedToken))
+  const [row] = await emailVerificationRepository.findUserIdByToken(hashedToken)
   if (!row) {
     throw new ApiError(403, 'invalid token')
   }

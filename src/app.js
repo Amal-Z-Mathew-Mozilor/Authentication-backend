@@ -5,17 +5,21 @@ import { website_route } from './routes/website.routes.js'
 import { image_route } from './routes/image.routes.js'
 import cookieParser from 'cookie-parser'
 import 'dotenv/config'
+
+// Environment configuration — all process.env reads live here at the top of the file.
+const PORT = process.env.PORT
+const TRUST_PROXY_HOPS = Number(process.env.TRUST_PROXY_HOPS) || 0
+const CORS_ORIGINS = process.env.CORS_ORIGINS || 'http://localhost:5173'
+
 export const app = express()
-const port = process.env.PORT
 // Behind nginx/CDN, the socket IP is the proxy's — the real client IP is in
 // X-Forwarded-For. Trust exactly TRUST_PROXY_HOPS proxies so Express derives
 // req.ip from XFF without trusting client-spoofed entries. Local dev has no
 // proxy, so this defaults to 0 (trust nothing → req.ip = socket IP).
-app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS) || 0)
+app.set('trust proxy', TRUST_PROXY_HOPS)
 // Allowed cross-origin frontends, from CORS_ORIGINS (comma-separated). Cookie auth
 // requires credentials:true + a specific echoed origin ("*" is invalid with credentials).
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
-  .split(',')
+const allowedOrigins = CORS_ORIGINS.split(',')
   .map((o) => o.trim())
   .filter(Boolean)
 app.use(
@@ -52,6 +56,6 @@ app.use((err, req, res, next) => {
     errors: err.error || [],
   })
 })
-app.listen(port, () => {
-  console.log(`listenng to ${port}`)
+app.listen(PORT, () => {
+  console.log(`listenng to ${PORT}`)
 })

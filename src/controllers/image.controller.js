@@ -1,9 +1,9 @@
-import db from '../db/index.js'
 import ApiError from '../utils/api-error.js'
 import ApiResponse from '../utils/api-response.js'
-import { websites, cookiePolicy, policyImages } from '../models/index.js'
+import * as websiteRepository from '../repositories/website.repository.js'
+import * as cookiePolicyRepository from '../repositories/cookiePolicy.repository.js'
+import * as policyImageRepository from '../repositories/policyImage.repository.js'
 import { asyncHandler } from '../utils/async-handler.js'
-import { and, eq } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { uploadObject, presignGetUrl } from '../utils/s3.js'
 
@@ -40,21 +40,12 @@ function sniffMime(buf) {
  * @throws {ApiError} 404 - Website not found or not owned by the user.
  */
 async function ensureOwnedPolicy(websiteId, userId) {
-  const [site] = await db
-    .select({ id: websites.id })
-    .from(websites)
-    .where(and(eq(websites.id, websiteId), eq(websites.userId, userId)))
+  const [site] = await websiteRepository.findIdByIdForUser(websiteId, userId)
   if (!site) throw new ApiError(404, 'website not found')
 
-  let [policy] = await db
-    .select({ id: cookiePolicy.id })
-    .from(cookiePolicy)
-    .where(eq(cookiePolicy.websiteId, websiteId))
+  let [policy] = await cookiePolicyRepository.findIdByWebsiteId(websiteId)
   if (!policy) {
-    ;[policy] = await db
-      .insert(cookiePolicy)
-      .values({ websiteId, content: {} })
-      .returning({ id: cookiePolicy.id })
+    ;[policy] = await cookiePolicyRepository.create({ websiteId, content: {} })
   }
   return policy.id
 }
@@ -84,10 +75,12 @@ export const uploadImage = asyncHandler(async (req, res) => {
   const ext = mime === 'image/png' ? 'png' : 'jpg'
   const key = `policy-images/${uuidv4()}.${ext}`
   await uploadObject(key, req.file.buffer, mime)
-  const [img] = await db
-    .insert(policyImages)
-    .values({ cookiePolicyId, key, mime, byteSize: req.file.size })
-    .returning({ id: policyImages.id })
+  const [img] = await policyImageRepository.create({
+    cookiePolicyId,
+    key,
+    mime,
+    byteSize: req.file.size,
+  })
 
   return res
     .status(201)
@@ -117,14 +110,10 @@ export const uploadImage = asyncHandler(async (req, res) => {
  */
 export const getImage = asyncHandler(async (req, res) => {
   if (!UUID_RE.test(req.params.id)) throw new ApiError(404, 'image not found')
-  const [img] = await db
-    .select({ key: policyImages.key })
-    .from(policyImages)
-    .innerJoin(cookiePolicy, eq(policyImages.cookiePolicyId, cookiePolicy.id))
-    .innerJoin(websites, eq(cookiePolicy.websiteId, websites.id))
-    .where(
-      and(eq(policyImages.id, req.params.id), eq(websites.userId, req.user.id)),
-    )
+  const [img] = await policyImageRepository.findKeyByIdForUser(
+    req.params.id,
+    req.user.id,
+  )
   if (!img) throw new ApiError(404, 'image not found')
 
   const url = await presignGetUrl(img.key)

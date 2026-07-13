@@ -1,4 +1,3 @@
-import db from '../db/index.js'
 import ApiError from '../utils/api-error.js'
 import ApiResponse from '../utils/api-response.js'
 import {
@@ -8,9 +7,10 @@ import {
 } from '../utils/mail.js'
 import { hashPassword, verifyPassword } from '../utils/password.js'
 import { hashToken, tokenGeneration } from '../utils/token.js'
-import { users, emailVerify, passwordReset } from '../models/index.js'
+import * as userRepository from '../repositories/user.repository.js'
+import * as emailVerificationRepository from '../repositories/emailVerification.repository.js'
+import * as passwordResetRepository from '../repositories/passwordReset.repository.js'
 import { asyncHandler } from '../utils/async-handler.js'
-import { eq } from 'drizzle-orm'
 import { acessSign, refreshSign, verifyRefresh } from '../utils/jwt.js'
 import { redisClient } from '../db/redis.js'
 import { resolveResetBase } from '../utils/resetBase.js'
@@ -18,8 +18,11 @@ import { resolveVerifyBase } from '../utils/verifyBase.js'
 import { clearAuthCookies } from '../utils/cookies.js'
 import jwt from 'jsonwebtoken'
 
+// Environment configuration — all process.env reads live here at the top of the file.
 const REFRESH_EXPIRY_SECONDS =
   Number(process.env.REFRESH_EXPIRY_SECONDS) || 604800
+const COOKIE_SAMESITE = process.env.COOKIE_SAMESITE || 'lax'
+const NODE_ENV = process.env.NODE_ENV
 /**
  * Register a new user, hash their password, and email an email-verification link.
  * @param {import('express').Request} req - The Express request.
@@ -34,22 +37,18 @@ const REFRESH_EXPIRY_SECONDS =
 export const signup = asyncHandler(async (req, res) => {
   const { email, password, verifyBase } = req.body
   const base = resolveVerifyBase(verifyBase)
-  const [existing] = await db
-    .select({ email: users.email })
-    .from(users)
-    .where(eq(users.email, email))
+  const [existing] = await userRepository.findByEmail(email)
   if (existing) {
     throw new ApiError(409, 'email already exist')
   }
   const hash = await hashPassword(password)
-  const [user] = await db
-    .insert(users)
-    .values({ password: hash, email: email })
-    .returning({ id: users.userId })
+  const [user] = await userRepository.createUser({ email, password: hash })
   const { unhashedToken, hashedToken, tokenExpiry } = tokenGeneration()
-  await db
-    .insert(emailVerify)
-    .values({ token: hashedToken, tokenExpiry: tokenExpiry, userId: user.id })
+  await emailVerificationRepository.create({
+    token: hashedToken,
+    tokenExpiry,
+    userId: user.id,
+  })
   await sendEmail({
     email: email,
     subject: 'please verify your email',
@@ -77,14 +76,7 @@ export const signup = asyncHandler(async (req, res) => {
 export const verifyMail = asyncHandler(async (req, res) => {
   const { token } = req.params
   const hashedToken = hashToken(token)
-  const [user] = await db
-    .select({
-      id: emailVerify.userId,
-      expiry: emailVerify.tokenExpiry,
-      isUsed: emailVerify.isUsed,
-    })
-    .from(emailVerify)
-    .where(eq(emailVerify.token, hashedToken))
+  const [user] = await emailVerificationRepository.findByToken(hashedToken)
   if (!user) {
     throw new ApiError(403, 'Invalid Token')
   }
@@ -94,14 +86,8 @@ export const verifyMail = asyncHandler(async (req, res) => {
   if (user.isUsed) {
     throw new ApiError(401, 'token already used')
   }
-  await db
-    .update(emailVerify)
-    .set({ isUsed: true })
-    .where(eq(emailVerify.token, hashedToken))
-  await db
-    .update(users)
-    .set({ isVerified: true })
-    .where(eq(users.userId, user.id))
+  await emailVerificationRepository.markUsed(hashedToken)
+  await userRepository.markVerified(user.id)
   const accessToken = await acessSign(user.id)
   const refreshToken = await refreshSign(user.id)
   // initialize the per-user iat cutoff for this new session (NX = don't move an existing cutoff)
@@ -110,10 +96,10 @@ export const verifyMail = asyncHandler(async (req, res) => {
     NX: true,
     EX: REFRESH_EXPIRY_SECONDS,
   })
-  const sameSite = process.env.COOKIE_SAMESITE || 'lax'
+  const sameSite = COOKIE_SAMESITE
   const options = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production' || sameSite === 'none',
+    secure: NODE_ENV === 'production' || sameSite === 'none',
     sameSite,
   }
   return res
@@ -134,10 +120,7 @@ export const verifyMail = asyncHandler(async (req, res) => {
 export const forgotPassword = asyncHandler(async (req, res) => {
   const { email, resetBase } = req.body
   const base = resolveResetBase(resetBase)
-  const [user] = await db
-    .select({ id: users.userId, email: users.email })
-    .from(users)
-    .where(eq(users.email, email))
+  const [user] = await userRepository.findByEmail(email)
   if (!user) {
     return res
       .status(200)
@@ -150,9 +133,11 @@ export const forgotPassword = asyncHandler(async (req, res) => {
       )
   }
   const { unhashedToken, hashedToken, tokenExpiry } = tokenGeneration()
-  await db
-    .insert(passwordReset)
-    .values({ userId: user.id, token: hashedToken, tokenExpiry: tokenExpiry })
+  await passwordResetRepository.create({
+    userId: user.id,
+    token: hashedToken,
+    tokenExpiry,
+  })
   await sendEmail({
     email: user.email,
     subject: 'To reset your password please verify your email',
@@ -200,10 +185,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
   }
 
   const id = req.user.id
-  const [user] = await db
-    .select({ password: users.password, email: users.email })
-    .from(users)
-    .where(eq(users.userId, id))
+  const [user] = await userRepository.findCredentialsById(id)
   if (!user) {
     throw new ApiError(400, "user doesn't exist")
   }
@@ -215,11 +197,8 @@ export const resetPassword = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'invalid credential')
   }
   const hash = await hashPassword(newPassword)
-  await db.update(users).set({ password: hash }).where(eq(users.userId, id))
-  await db
-    .update(passwordReset)
-    .set({ isUsed: true })
-    .where(eq(passwordReset.token, req.user.token))
+  await userRepository.updatePassword(id, hash)
+  await passwordResetRepository.markUsed(req.user.token)
   return res
     .status(200)
     .json(new ApiResponse(200, {}, 'password updated sucessfully'))
@@ -242,17 +221,7 @@ export const login = asyncHandler(async (req, res) => {
   const MAX_IP_ATTEMPTS = 10
   const key = `login:ip:${req.ip}`
   const { email, password } = req.body
-  const [user] = await db
-    .select({
-      id: users.userId,
-      locked: users.isLocked,
-      lockedUntil: users.lockedUntil,
-      limit: users.failedLoginAttempts,
-      verified: users.isVerified,
-      password: users.password,
-    })
-    .from(users)
-    .where(eq(users.email, email))
+  const [user] = await userRepository.findAuthByEmail(email)
   if (!user) {
     const attempts = await redisClient.incr(key)
 
@@ -274,10 +243,7 @@ export const login = asyncHandler(async (req, res) => {
         retryAfter: remainingTime,
       })
     }
-    await db
-      .update(users)
-      .set({ isLocked: false, lockedUntil: null, failedLoginAttempts: 0 })
-      .where(eq(users.userId, user.id))
+    await userRepository.clearLock(user.id)
     user.limit = 0
   }
   const result = await verifyPassword(password, user.password)
@@ -290,14 +256,11 @@ export const login = asyncHandler(async (req, res) => {
       if (limit >= MAX_ATTEMPTS) {
         const lockedUntil = new Date(Date.now() + 2 * 60 * 1000)
 
-        await db
-          .update(users)
-          .set({
-            failedLoginAttempts: limit,
-            isLocked: true,
-            lockedUntil,
-          })
-          .where(eq(users.userId, user.id))
+        await userRepository.applyLock(user.id, {
+          failedLoginAttempts: limit,
+          isLocked: true,
+          lockedUntil,
+        })
 
         remainingTime = Math.ceil((lockedUntil.getTime() - Date.now()) / 1000)
       }
@@ -314,10 +277,7 @@ export const login = asyncHandler(async (req, res) => {
       })
     }
 
-    await db
-      .update(users)
-      .set({ failedLoginAttempts: limit })
-      .where(eq(users.userId, user.id))
+    await userRepository.setFailedAttempts(user.id, limit)
 
     throw new ApiError(401, 'Invalid credentials')
   }
@@ -325,10 +285,7 @@ export const login = asyncHandler(async (req, res) => {
     throw new ApiError(403, 'pls verify email')
   }
   await redisClient.del(key)
-  await db
-    .update(users)
-    .set({ failedLoginAttempts: 0 })
-    .where(eq(users.userId, user.id))
+  await userRepository.resetFailedAttempts(user.id)
   const accessToken = await acessSign(user.id)
   const refreshToken = await refreshSign(user.id)
   // initialize the per-user iat cutoff for this new session (NX = don't move an existing cutoff)
@@ -337,10 +294,10 @@ export const login = asyncHandler(async (req, res) => {
     NX: true,
     EX: REFRESH_EXPIRY_SECONDS,
   })
-  const sameSite = process.env.COOKIE_SAMESITE || 'lax'
+  const sameSite = COOKIE_SAMESITE
   const options = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production' || sameSite === 'none',
+    secure: NODE_ENV === 'production' || sameSite === 'none',
     sameSite,
   }
   return res
@@ -403,10 +360,10 @@ export const rotateToken = asyncHandler(async (req, res) => {
   const refresh = await refreshSign(decoded.id)
   // extend the cutoff key's TTL for this active session (value unchanged); no-op if absent
   await redisClient.expire(`session:iat:${decoded.id}`, REFRESH_EXPIRY_SECONDS)
-  const sameSite = process.env.COOKIE_SAMESITE || 'lax'
+  const sameSite = COOKIE_SAMESITE
   const options = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production' || sameSite === 'none',
+    secure: NODE_ENV === 'production' || sameSite === 'none',
     sameSite,
   }
   return res
@@ -429,10 +386,7 @@ export const rotateToken = asyncHandler(async (req, res) => {
  */
 export const changePassword = asyncHandler(async (req, res) => {
   const { oldPassword, newPassword, confirmPassword } = req.body
-  const [user] = await db
-    .select({ password: users.password })
-    .from(users)
-    .where(eq(users.userId, req.user.id))
+  const [user] = await userRepository.findPasswordById(req.user.id)
   const result = await verifyPassword(oldPassword, user.password)
   if (!result) {
     throw new ApiError(400, 'old password doesnt match')
@@ -446,10 +400,7 @@ export const changePassword = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'new password must not be same as old one')
   }
   const hash = await hashPassword(newPassword)
-  await db
-    .update(users)
-    .set({ password: hash })
-    .where(eq(users.userId, req.user.id))
+  await userRepository.updatePassword(req.user.id, hash)
   // bump the cutoff to now → every existing access/refresh token (iat < now) is invalidated,
   // logging the user out of every browser/device on their next request.
   const now = Math.floor(Date.now() / 1000)
@@ -487,10 +438,7 @@ export const me = asyncHandler(async (req, res) => {
 export const resendVerification = asyncHandler(async (req, res) => {
   const id = req.user.id
   const base = resolveVerifyBase(req.body?.verifyBase)
-  const [user] = await db
-    .select({ email: users.email, verified: users.isVerified })
-    .from(users)
-    .where(eq(users.userId, id))
+  const [user] = await userRepository.findEmailAndVerifiedById(id)
   if (!user) {
     throw new ApiError(400, "user doesn't exist")
   }
@@ -498,9 +446,11 @@ export const resendVerification = asyncHandler(async (req, res) => {
     throw new ApiError(409, 'email already verified')
   }
   const { unhashedToken, hashedToken, tokenExpiry } = tokenGeneration()
-  await db
-    .insert(emailVerify)
-    .values({ token: hashedToken, tokenExpiry: tokenExpiry, userId: id })
+  await emailVerificationRepository.create({
+    token: hashedToken,
+    tokenExpiry,
+    userId: id,
+  })
   await sendEmail({
     email: user.email,
     subject: 'please verify your email',
@@ -523,17 +473,16 @@ export const resendVerification = asyncHandler(async (req, res) => {
 export const resetResend = asyncHandler(async (req, res) => {
   const id = req.user.id
   const base = resolveResetBase(req.body?.resetBase)
-  const [user] = await db
-    .select({ email: users.email })
-    .from(users)
-    .where(eq(users.userId, id))
+  const [user] = await userRepository.findEmailById(id)
   if (!user) {
     throw new ApiError(400, "user doesn't exist")
   }
   const { unhashedToken, hashedToken, tokenExpiry } = tokenGeneration()
-  await db
-    .insert(passwordReset)
-    .values({ token: hashedToken, tokenExpiry: tokenExpiry, userId: id })
+  await passwordResetRepository.create({
+    token: hashedToken,
+    tokenExpiry,
+    userId: id,
+  })
   await sendEmail({
     email: user.email,
     subject: 'To reset your password please verify your email',

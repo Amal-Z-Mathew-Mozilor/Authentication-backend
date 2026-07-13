@@ -1,9 +1,7 @@
-import db from '../db/index.js'
 import ApiError from '../utils/api-error.js'
 import ApiResponse from '../utils/api-response.js'
-import { websites, cookiePolicy } from '../models/index.js'
+import * as websiteRepository from '../repositories/website.repository.js'
 import { asyncHandler } from '../utils/async-handler.js'
-import { and, eq, desc } from 'drizzle-orm'
 import { defaultCookieContent } from '../utils/defaultCookiePolicy.js'
 
 // All handlers are scoped to the authenticated user (req.user.id, set by jwtValidation).
@@ -25,10 +23,7 @@ import { defaultCookieContent } from '../utils/defaultCookiePolicy.js'
 async function assertNoDuplicate(userId, name, url, excludeId = null) {
   const n = (name || '').trim().toLowerCase()
   const u = (url || '').trim().toLowerCase().replace(/\/+$/, '')
-  const rows = await db
-    .select({ id: websites.id, name: websites.name, url: websites.url })
-    .from(websites)
-    .where(eq(websites.userId, userId))
+  const rows = await websiteRepository.findByUserId(userId)
 
   let nameTaken = false
   let urlTaken = false
@@ -58,17 +53,7 @@ async function assertNoDuplicate(userId, name, url, excludeId = null) {
  * @returns {Promise<void>}
  */
 export const listWebsites = asyncHandler(async (req, res) => {
-  const rows = await db
-    .select({
-      id: websites.id,
-      name: websites.name,
-      url: websites.url,
-      createdAt: websites.createdAt,
-      updatedAt: websites.updatedAt,
-    })
-    .from(websites)
-    .where(eq(websites.userId, req.user.id))
-    .orderBy(desc(websites.createdAt))
+  const rows = await websiteRepository.listByUserId(req.user.id)
   return res
     .status(200)
     .json(new ApiResponse(200, rows, 'websites fetched sucessfully'))
@@ -93,20 +78,11 @@ export const createWebsite = asyncHandler(async (req, res) => {
   const today = new Date().toISOString().slice(0, 10)
   // Create the website AND seed its cookie_policy (default content) atomically, so a new
   // site's editor opens pre-filled instead of blank. Rolls back if either insert fails.
-  const website = await db.transaction(async (tx) => {
-    const [w] = await tx
-      .insert(websites)
-      .values({ name, url, userId: req.user.id })
-      .returning({
-        id: websites.id,
-        name: websites.name,
-        url: websites.url,
-        createdAt: websites.createdAt,
-      })
-    await tx
-      .insert(cookiePolicy)
-      .values({ websiteId: w.id, content: defaultCookieContent(today) })
-    return w
+  const website = await websiteRepository.createWithPolicy({
+    name,
+    url,
+    userId: req.user.id,
+    policyContent: defaultCookieContent(today),
   })
   return res
     .status(201)
@@ -131,18 +107,11 @@ export const updateWebsite = asyncHandler(async (req, res) => {
   // Reject collisions with the user's OTHER websites; the row being edited is excluded so
   // it can keep its own name/url.
   await assertNoDuplicate(req.user.id, name, url, req.params.id)
-  const [website] = await db
-    .update(websites)
-    .set({ name, url })
-    .where(
-      and(eq(websites.id, req.params.id), eq(websites.userId, req.user.id)),
-    )
-    .returning({
-      id: websites.id,
-      name: websites.name,
-      url: websites.url,
-      updatedAt: websites.updatedAt,
-    })
+  const [website] = await websiteRepository.updateByIdForUser(
+    req.params.id,
+    req.user.id,
+    { name, url },
+  )
   if (!website) {
     throw new ApiError(404, 'website not found')
   }
@@ -161,12 +130,10 @@ export const updateWebsite = asyncHandler(async (req, res) => {
  * @throws {ApiError} 404 - Website not found or not owned by the user.
  */
 export const deleteWebsite = asyncHandler(async (req, res) => {
-  const [website] = await db
-    .delete(websites)
-    .where(
-      and(eq(websites.id, req.params.id), eq(websites.userId, req.user.id)),
-    )
-    .returning({ id: websites.id })
+  const [website] = await websiteRepository.deleteByIdForUser(
+    req.params.id,
+    req.user.id,
+  )
   if (!website) {
     throw new ApiError(404, 'website not found')
   }

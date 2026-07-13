@@ -2,6 +2,12 @@ import Mailgen from 'mailgen'
 import nodemailer from 'nodemailer'
 import 'dotenv/config'
 import { escapeHtml } from './policyHtml.js'
+
+// Environment configuration — all process.env reads live here at the top of the file.
+const MAIL_HOST = process.env.MAIL_HOST
+const MAIL_PORT = process.env.MAIL_PORT
+const MAIL_USER = process.env.MAIL_USER
+const MAIL_PASSWORD = process.env.MAIL_PASSWORD
 /**
  * Build the Mailgen email body for the account email-verification message.
  * @param {string} username - Recipient name shown in the greeting.
@@ -127,11 +133,11 @@ const sendEmail = async function (options) {
   }
 
   const transport = nodemailer.createTransport({
-    host: process.env.MAIL_HOST,
-    port: process.env.MAIL_PORT,
+    host: MAIL_HOST,
+    port: MAIL_PORT,
     auth: {
-      user: process.env.MAIL_USER,
-      pass: process.env.MAIL_PASSWORD,
+      user: MAIL_USER,
+      pass: MAIL_PASSWORD,
     },
   })
   const mail = {

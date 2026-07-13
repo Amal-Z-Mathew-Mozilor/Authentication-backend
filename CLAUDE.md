@@ -53,17 +53,24 @@ src/
 │   ├── passwordResend.middleware.js  # resetTokenResolve() — reset token → req.user.id (for resend)
 │   └── emailVerify.middleware.js     # emailTokenValidation() — verify token → req.user.id (for resend)
 ├── models/                       # drizzle schemas: userschema, email_verification, password_reset, websites, cookie_policy, policy_images (+ index)
+├── repositories/                 # ALL Drizzle queries live here (one file per table); controllers/middlewares/utils import + call these — no inline db.* elsewhere
+│   ├── user.repository.js        # users: findByEmail/findAuthByEmail, createUser, markVerified, lock helpers, updatePassword, …
+│   ├── emailVerification.repository.js # emailVerify: create, findByToken, findUserIdByToken, markUsed
+│   ├── passwordReset.repository.js     # passwordReset: create, findByToken, findUserIdByToken, markUsed
+│   ├── website.repository.js     # websites: findByUserId, listByUserId, createWithPolicy (tx), update/deleteByIdForUser, findIdByIdForUser, findUrlById
+│   ├── cookiePolicy.repository.js # cookie_policy: findContent/findBy/findIdAndContent/findId ByWebsiteId, create, updateContentByWebsiteId
+│   └── policyImage.repository.js  # policy_images: findByPolicyAndIds, findByPolicyId, findKeyByIdForUser (join), create, deleteByIdsForPolicy
 ├── validators/user.validator.js  # register/login/forgot/reset/changePassword validators (use .bail())
 ├── validators/website.validator.js  # websiteValidator() — name + url (use .bail())
 ├── validators/cookiePolicy.validator.js  # cookieSectionValidator() — heading + description; effectiveDateValidator() — ISO YYYY-MM-DD
 ├── scripts/smoke.js              # auth + website CRUD smoke test (npm run smoke)
 ├── utils/
-│   ├── jwt.js                    # acessSign, refreshSign, verifyAccess, verifyRefresh
+│   ├── jwt.js                    # acessSign, refreshSign, verifyAccess, verifyRefresh (user lookup via user.repository)
 │   ├── token.js                  # tokenGeneration (raw+sha256), hashToken
 │   ├── password.js               # hashPassword, verifyPassword (bcrypt)
 │   ├── mail.js                   # emailVerification / passwordResetVerification templates + sendEmail
 │   ├── resetBase.js / verifyBase.js  # allowlist validators for client-supplied email link bases
-│   ├── cookiePolicy.js           # SECTIONS allowlist, imageIdsFrom/sanitizeIds, sweepOrphanImages, assertOwnedWebsite
+│   ├── cookiePolicy.js           # SECTIONS allowlist, imageIdsFrom/sanitizeIds, sweepOrphanImages (S3 + policyImage.repository), assertOwnedWebsite (website.repository)
 │   ├── defaultCookiePolicy.js    # DEFAULT_COOKIE_SECTIONS + defaultCookieContent() — seeded into a new website's policy
 │   ├── policyHtml.js             # renderPolicyHtml() + helpers — the saved policy as a self-contained HTML snippet (the "HTML format" export)
 │   ├── s3.js                     # S3 client + uploadObject/getObjectBuffer/deleteObject/presignGetUrl (private bucket; presigned reads)
@@ -200,6 +207,20 @@ form. See `AI_DOCS/reset_token_precheck.md`.
 - **Errors:** `throw new ApiError(code, message, error)` → caught by `asyncHandler` → the global
   error handler in `app.js` → `{ success: false, message, errors }`. `422` puts the
   express-validator array in `errors`; the `429` IP limit puts `{ retryAfter }` there.
+
+## Data access (repositories)
+**All Drizzle queries live in `src/repositories/` — one file per table.** Controllers,
+middlewares, and utils **never** build queries inline; they import a repository
+(`import * as userRepository from '../repositories/user.repository.js'`) and call its
+functions. Each function reproduces one query's exact projection/`where`/`.returning(...)`
+and returns the raw Drizzle result (callers keep `const [row] = await repo.fn(...)`).
+Shared queries are deduped into a single function; different projections get distinct,
+descriptively-named functions. Non-DB logic (S3, Redis, `ApiError`, business rules) stays
+in the caller — only the DB access moves. When adding a query, put it in the matching
+`*.repository.js` (create one for a new table); the only Drizzle outside `repositories/`
+is the schemas in `models/` and `drizzle.config.js`. Refresh tokens are Redis, not Drizzle,
+so there is no `refreshToken` repository. See
+`cookiegenerator-plan/repository-layer-extraction.md`.
 
 ## Validation
 Validators (`user.validator.js`) run in the route chain, then `validation()` throws `422` with the

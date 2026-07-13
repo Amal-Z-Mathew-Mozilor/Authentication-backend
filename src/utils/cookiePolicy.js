@@ -1,7 +1,6 @@
-import db from '../db/index.js'
 import ApiError from './api-error.js'
-import { websites, policyImages } from '../models/index.js'
-import { and, eq, inArray } from 'drizzle-orm'
+import * as websiteRepository from '../repositories/website.repository.js'
+import * as policyImageRepository from '../repositories/policyImage.repository.js'
 import { deleteObject } from './s3.js'
 
 // Sections stored as sibling keys in the cookie_policy.content jsonb. Adding a new
@@ -50,10 +49,7 @@ export function sanitizeIds(arr) {
  * @returns {Promise<void>}
  */
 export async function sweepOrphanImages(cookiePolicyId, keepIds) {
-  const rows = await db
-    .select({ id: policyImages.id, key: policyImages.key })
-    .from(policyImages)
-    .where(eq(policyImages.cookiePolicyId, cookiePolicyId))
+  const rows = await policyImageRepository.findByPolicyId(cookiePolicyId)
   const orphans = rows.filter((r) => !keepIds.has(r.id.toLowerCase()))
   if (!orphans.length) return
 
@@ -64,14 +60,9 @@ export async function sweepOrphanImages(cookiePolicyId, keepIds) {
       /* best-effort: leave the object; DB row is still removed below */
     }
   }
-  await db.delete(policyImages).where(
-    and(
-      eq(policyImages.cookiePolicyId, cookiePolicyId),
-      inArray(
-        policyImages.id,
-        orphans.map((o) => o.id),
-      ),
-    ),
+  await policyImageRepository.deleteByIdsForPolicy(
+    cookiePolicyId,
+    orphans.map((o) => o.id),
   )
 }
 
@@ -84,9 +75,6 @@ export async function sweepOrphanImages(cookiePolicyId, keepIds) {
  * @throws {ApiError} 404 - Website does not exist or is not owned by the user.
  */
 export async function assertOwnedWebsite(websiteId, userId) {
-  const [site] = await db
-    .select({ id: websites.id })
-    .from(websites)
-    .where(and(eq(websites.id, websiteId), eq(websites.userId, userId)))
+  const [site] = await websiteRepository.findIdByIdForUser(websiteId, userId)
   if (!site) throw new ApiError(404, 'website not found')
 }

@@ -14,6 +14,7 @@ import 'dotenv/config'
 export const S3_BUCKET = process.env.S3_BUCKET || ''
 const REGION = process.env.AWS_REGION || 'us-east-1'
 const PRESIGN_EXPIRY = Number(process.env.S3_PRESIGN_EXPIRY) || 300
+const S3_ENDPOINT = process.env.S3_ENDPOINT
 
 // True only when a bucket is configured — lets smoke and other paths skip S3 gracefully.
 /**
@@ -24,9 +25,7 @@ export const s3Enabled = () => !!S3_BUCKET
 
 const client = new S3Client({
   region: REGION,
-  ...(process.env.S3_ENDPOINT
-    ? { endpoint: process.env.S3_ENDPOINT, forcePathStyle: true }
-    : {}),
+  ...(S3_ENDPOINT ? { endpoint: S3_ENDPOINT, forcePathStyle: true } : {}),
 })
 
 // Upload bytes under `key` with the given content type.
