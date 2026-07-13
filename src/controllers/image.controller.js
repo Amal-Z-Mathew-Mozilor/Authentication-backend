@@ -4,7 +4,7 @@ import * as cookiePolicyRepository from '../repositories/cookiePolicy.repository
 import * as policyImageRepository from '../repositories/policyImage.repository.js'
 import { asyncHandler } from '../utils/async-handler.js'
 import { v4 as uuidv4 } from 'uuid'
-import { uploadObject, presignGetUrl } from '../utils/aws/index.js'
+import { uploadObject, getObjectBuffer } from '../utils/aws/index.js'
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -95,17 +95,17 @@ export const uploadImage = asyncHandler(async (req, res) => {
 // Owner-scoped read: the image must belong to one of the caller's cookie policies
 // (policy_images → cookie_policy → websites → userId). A non-existent id OR another
 // user's image both return 404 (don't leak which ids exist). jwtValidation sets req.user.
-// The bytes live in a private S3 bucket, so we mint a fresh short-lived presigned GET URL
-// for the row's key and 302-redirect to it — the browser then fetches directly from S3.
-// The stored /pulse/images/:id URL never changes and no presigned URL is persisted.
+// The bytes live in a private S3 bucket; we read them and stream them back directly with
+// the row's content type — no presigned URL, no redirect. A given id maps to a fixed,
+// never-changing object, so it's served with a long immutable cache (private = owner-scoped).
 /**
- * Serve an owner-scoped policy image by 302-redirecting to a fresh short-lived presigned S3 GET URL.
+ * Serve an owner-scoped policy image by streaming its bytes from S3 with the row's content type.
  * @param {import('express').Request} req - The Express request.
  * @param {string} req.params.id - Image id (UUID) to serve.
  * @param {string} req.user.id - Authenticated user id (set by jwtValidation).
- * @param {import('express').Response} res - Sets Cache-Control: no-store and 302-redirects to the presigned URL.
+ * @param {import('express').Response} res - Sends the image bytes with Content-Type + immutable Cache-Control.
  * @returns {Promise<void>}
- * @throws {ApiError} 404 - Malformed id, or image not found / not owned by the user.
+ * @throws {ApiError} 404 - Malformed id, image not found / not owned, or its S3 object is unreadable.
  */
 export const getImage = asyncHandler(async (req, res) => {
   if (!UUID_RE.test(req.params.id)) throw new ApiError(404, 'image not found')
@@ -115,8 +115,15 @@ export const getImage = asyncHandler(async (req, res) => {
   )
   if (!img) throw new ApiError(404, 'image not found')
 
-  const url = await presignGetUrl(img.key)
-  // Don't let the browser cache the redirect — each load should mint a fresh (unexpired) URL.
-  res.set('Cache-Control', 'no-store')
-  return res.redirect(302, url)
+  let buf
+  try {
+    buf = await getObjectBuffer(img.key)
+  } catch {
+    // Object missing/unreadable in S3 — treat as not found rather than a 500.
+    throw new ApiError(404, 'image not found')
+  }
+  res.set('Content-Type', img.mime)
+  // id → bytes is immutable, so allow aggressive caching; private since it's owner-scoped.
+  res.set('Cache-Control', 'private, max-age=31536000, immutable')
+  return res.send(buf)
 })

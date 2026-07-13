@@ -1074,8 +1074,10 @@ paths:
         Returns the raw image bytes by id. **Authenticated and owner-scoped** — the image
         must belong to one of the caller's cookie policies (joined via
         cookie_policy → websites → userId). A non-existent id OR another user's image both
-        return `404` (so ids aren't enumerable). Rendered in the editor/preview via the
-        auto-attached `accessToken` cookie; served with `Cache-Control: private`.
+        return `404` (so ids aren't enumerable); an unreadable S3 object also `404`s. The
+        server reads the bytes from S3 and streams them directly (no presigned URL / redirect).
+        Rendered in the editor/preview via the auto-attached `accessToken` cookie; served with
+        `Cache-Control: private, max-age=31536000, immutable` (a given id maps to a fixed object).
       security:
         - accessTokenCookie: []
       parameters:

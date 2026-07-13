@@ -563,12 +563,12 @@ async function main() {
         body: fd,
       })
     }
-    // Image serve is authenticated + owner-scoped and now 302-redirects to a presigned S3
-    // URL — send the cookie jar and DON'T follow the redirect (assert the 302 itself).
+    // Image serve is authenticated + owner-scoped and streams the bytes directly (200 with
+    // an image Content-Type) — send the cookie jar and assert the response.
     /**
-     * Fetch an image URL with the cookie jar, without following the presigned-URL redirect.
+     * Fetch an image URL with the cookie jar.
      * @param {string} url - Image path under BASE (e.g. /pulse/images/<id>).
-     * @returns {Promise<Response>} The fetch Response (redirect:'manual', so a 302 is observable).
+     * @returns {Promise<Response>} The fetch Response (200 with the image bytes when owned).
      */
     function getImg(url) {
       const headers = {}
@@ -576,7 +576,7 @@ async function main() {
         .map(([k, v]) => `${k}=${v}`)
         .join('; ')
       if (ck) headers.Cookie = ck
-      return fetch(BASE + url, { headers, redirect: 'manual' })
+      return fetch(BASE + url, { headers })
     }
     const PNG_1x1 =
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
@@ -594,10 +594,10 @@ async function main() {
 
     const imgRes = await getImg(imgUrl)
     check(
-      'image serve (authed owner) → 302 to presigned S3 URL',
-      imgRes.status === 302 &&
-        (imgRes.headers.get('location') || '').includes('X-Amz-'),
-      `got ${imgRes.status}`,
+      'image serve (authed owner) → 200 with image bytes',
+      imgRes.status === 200 &&
+        (imgRes.headers.get('content-type') || '').startsWith('image/'),
+      `got ${imgRes.status} ${imgRes.headers.get('content-type')}`,
     )
 
     // No auth cookie → 401 (route is no longer public).
@@ -662,8 +662,8 @@ async function main() {
     })
     const servedKept = await getImg(imgUrl)
     check(
-      'image referenced in saved section is kept → 302',
-      servedKept.status === 302,
+      'image referenced in saved section is kept → 200',
+      servedKept.status === 200,
       `got ${servedKept.status}`,
     )
 
@@ -706,8 +706,8 @@ async function main() {
     })
     const servedProtected = await getImg(imgBUrl)
     check(
-      'image kept via usedImageIds (unsaved sibling) → 302',
-      servedProtected.status === 302,
+      'image kept via usedImageIds (unsaved sibling) → 200',
+      servedProtected.status === 200,
       `got ${servedProtected.status}`,
     )
 

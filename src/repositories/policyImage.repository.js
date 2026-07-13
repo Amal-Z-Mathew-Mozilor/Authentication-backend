@@ -37,14 +37,14 @@ export function findByPolicyId(cookiePolicyId) {
 }
 
 /**
- * Resolve an image's S3 key by id, scoped to the requesting owner (3-table join).
+ * Resolve an image's S3 key + mime by id, scoped to the requesting owner (3-table join).
  * @param {string} imageId - The image id.
  * @param {string} userId - The requesting user's id.
- * @returns {Promise<Array<{ key: string }>>} Zero or one row (empty if missing or not owned).
+ * @returns {Promise<Array<{ key: string, mime: string }>>} Zero or one row (empty if missing or not owned).
  */
 export function findKeyByIdForUser(imageId, userId) {
   return db
-    .select({ key: policyImages.key })
+    .select({ key: policyImages.key, mime: policyImages.mime })
     .from(policyImages)
     .innerJoin(cookiePolicy, eq(policyImages.cookiePolicyId, cookiePolicy.id))
     .innerJoin(websites, eq(cookiePolicy.websiteId, websites.id))
