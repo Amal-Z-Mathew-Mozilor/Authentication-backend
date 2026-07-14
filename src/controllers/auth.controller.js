@@ -68,7 +68,7 @@ export const signup = asyncHandler(async (req, res) => {
     )
 })
 /**
- * Verify a user's email from the token, mark them verified, and start a session by setting auth cookies.
+ * Verify a user's email from the token, mark them verified, and start a session by setting auth cookies. Initializes the per-user session iat cutoff (set NX, so an existing cutoff is never moved).
  * @param {import('express').Request} req - The Express request.
  * @param {string} req.params.token - Raw email-verification token from the URL.
  * @param {import('express').Response} res - Sets accessToken/refreshToken cookies; sends 200.
@@ -93,7 +93,6 @@ export const verifyMail = asyncHandler(async (req, res) => {
   await userRepository.markVerified(user.id)
   const accessToken = await acessSign(user.id)
   const refreshToken = await refreshSign(user.id)
-  // initialize the per-user iat cutoff for this new session (NX = don't move an existing cutoff)
   const { iat } = jwt.decode(accessToken)
   await redisClient.set(`session:iat:${user.id}`, String(iat), {
     NX: true,
@@ -207,7 +206,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, 'password updated sucessfully'))
 })
 /**
- * Authenticate credentials, enforce per-account and per-IP lockout, and start a session by setting auth cookies.
+ * Authenticate credentials, enforce per-account and per-IP lockout, and start a session by setting auth cookies. Initializes the per-user session iat cutoff (set NX, so an existing cutoff is never moved).
  * @param {import('express').Request} req - The Express request.
  * @param {object} req.body - Request body.
  * @param {string} req.body.email - Account email.
@@ -291,7 +290,6 @@ export const login = asyncHandler(async (req, res) => {
   await userRepository.resetFailedAttempts(user.id)
   const accessToken = await acessSign(user.id)
   const refreshToken = await refreshSign(user.id)
-  // initialize the per-user iat cutoff for this new session (NX = don't move an existing cutoff)
   const { iat } = jwt.decode(accessToken)
   await redisClient.set(`session:iat:${user.id}`, String(iat), {
     NX: true,
@@ -310,7 +308,7 @@ export const login = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, 'login sucessfull'))
 })
 /**
- * Revoke the current session by deleting the refresh token, blacklisting the access token jti, and clearing cookies.
+ * Revoke the current session by deleting the refresh token, blacklisting the access token jti, and clearing cookies. The session iat cutoff is left in place (it self-expires via its TTL).
  * @param {import('express').Request} req - The Express request.
  * @param {string} req.cookies.refreshToken - Refresh-token cookie (deleted from the Redis store).
  * @param {number} req.user.exp - Access-token expiry (set by jwtValidation; used for the blacklist TTL).
@@ -328,12 +326,11 @@ export const logout = asyncHandler(async (req, res) => {
   await redisClient.del(`refresh:${refreshToken}`)
   const ttl = req.user.exp - Math.floor(Date.now() / 1000)
   await redisClient.set(`blacklist:${req.user.jti}`, 'true', { EX: ttl })
-  // cutoff key is left in place (self-expires via TTL); only clear the cookies.
   clearAuthCookies(res)
   return res.status(200).json(new ApiResponse(200, {}, 'logout sucessful'))
 })
 /**
- * Rotate the refresh token: verify it, enforce the session iat cutoff, and issue a fresh access+refresh pair.
+ * Rotate the refresh token: verify it, enforce the session iat cutoff, refresh that cutoff's TTL, and issue a fresh access+refresh pair.
  * @param {import('express').Request} req - The Express request.
  * @param {string} req.cookies.refreshToken - Refresh-token cookie to rotate.
  * @param {import('express').Response} res - Sets new accessToken/refreshToken cookies; sends 200.
@@ -351,7 +348,6 @@ export const rotateToken = asyncHandler(async (req, res) => {
   } catch (err) {
     throw new ApiError(401, 'invalid token')
   }
-  // cutoff guard — a refresh token issued before the user's cutoff must not mint a fresh token
   const cutoff = await redisClient.get(`session:iat:${decoded.id}`)
   if (cutoff && decoded.iat < Number(cutoff)) {
     await redisClient.del(`refresh:${refreshToken}`)
@@ -361,7 +357,6 @@ export const rotateToken = asyncHandler(async (req, res) => {
   await redisClient.del(`refresh:${refreshToken}`)
   const accessToken = await acessSign(decoded.id)
   const refresh = await refreshSign(decoded.id)
-  // extend the cutoff key's TTL for this active session (value unchanged); no-op if absent
   await redisClient.expire(`session:iat:${decoded.id}`, REFRESH_EXPIRY_SECONDS)
   const sameSite = COOKIE_SAMESITE
   const options = {
@@ -404,8 +399,6 @@ export const changePassword = asyncHandler(async (req, res) => {
   }
   const hash = await hashPassword(newPassword)
   await userRepository.updatePassword(req.user.id, hash)
-  // bump the cutoff to now → every existing access/refresh token (iat < now) is invalidated,
-  // logging the user out of every browser/device on their next request.
   const now = Math.floor(Date.now() / 1000)
   await redisClient.set(`session:iat:${req.user.id}`, String(now), {
     EX: REFRESH_EXPIRY_SECONDS,

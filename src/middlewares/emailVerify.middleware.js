@@ -3,12 +3,10 @@ import { ApiError } from '../utils/response/index.js'
 import * as emailVerificationRepository from '../repositories/emailVerification.repository.js'
 import { asyncHandler } from '../utils/async-handler.js'
 
-// Resolves an email-verification token (from the URL) to its userId so the resend
-// controller knows whom to email. Does not check expiry/isUsed — the row is only used
-// to identify the user (the token is expired by the time resend is triggered).
 /**
- * Resolve an email-verification token to its userId for the resend flow (no expiry/isUsed check).
- * On success attaches req.user = { id } and calls next().
+ * Resolve an email-verification token to its userId for the resend flow. Does not check
+ * expiry/isUsed because the token is already expired by the time resend is triggered — the row
+ * only identifies whom to email. On success attaches req.user = { id } and calls next().
  * @param {import('express').Request} req - The Express request.
  * @param {string} req.params.token - Raw email-verification token from the URL (hashed, then looked up in email_verify).
  * @param {import('express').Response} res - Unused.

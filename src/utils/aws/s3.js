@@ -15,7 +15,6 @@ export const S3_BUCKET = process.env.S3_BUCKET || ''
 const REGION = process.env.AWS_REGION || 'us-east-1'
 const S3_ENDPOINT = process.env.S3_ENDPOINT
 
-// True only when a bucket is configured — lets smoke and other paths skip S3 gracefully.
 /**
  * Report whether a bucket is configured (lets smoke/other paths skip S3 gracefully).
  * @returns {boolean} True when S3_BUCKET is set.
@@ -27,7 +26,6 @@ const client = new S3Client({
   ...(S3_ENDPOINT ? { endpoint: S3_ENDPOINT, forcePathStyle: true } : {}),
 })
 
-// Upload bytes under `key` with the given content type.
 /**
  * Upload bytes to the bucket under the given key.
  * @param {string} key - S3 object key.
@@ -46,7 +44,6 @@ export async function uploadObject(key, body, contentType) {
   )
 }
 
-// Read an object's bytes as a Buffer (server-side; used to base64-inline in the export).
 /**
  * Read an object's bytes into a Buffer (used to base64-inline images in the HTML export).
  * @param {string} key - S3 object key.

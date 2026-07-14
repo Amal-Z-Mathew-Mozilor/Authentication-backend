@@ -1,9 +1,8 @@
 import { body } from 'express-validator'
-// A cookie-policy section (About cookies, Use of cookies, …) — fields are optional
-// (a draft may be partial). Section-agnostic: same heading/description rules for all.
 /**
  * Build the express-validator chain for one cookie-policy section's heading + description.
- * Both fields are optional (a draft may be partial) and only length-capped.
+ * Section-agnostic (same rules for every section); both fields are optional (a draft may be
+ * partial) and only length-capped.
  * @returns {import('express-validator').ValidationChain[]} Chain (heading ≤255, description ≤20000).
  */
 export const cookieSectionValidator = () => {
@@ -22,8 +21,6 @@ export const cookieSectionValidator = () => {
   ]
 }
 
-// "Send code to a teammate" — recipient email is required and must be valid. Mirrors the
-// email chain in user.validator.js (.bail() so an empty field shows only "is required").
 /**
  * Build the express-validator chain for the "send code to a teammate" recipient email.
  * @returns {import('express-validator').ValidationChain[]} Chain (email required, valid, normalized; bails when empty).
@@ -41,8 +38,6 @@ export const sendCodeValidator = () => {
   ]
 }
 
-// Policy-level effective date — optional; when present must be an ISO calendar date
-// (YYYY-MM-DD). The shape check bails first so a bad format shows one clear message.
 /**
  * Build the express-validator chain for the policy-level effectiveDate field.
  * Optional; when present must be an ISO YYYY-MM-DD calendar date (format check bails first).

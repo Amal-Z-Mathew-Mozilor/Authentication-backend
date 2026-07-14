@@ -5,11 +5,6 @@ import { defaultCookieContent } from '../utils/cookiePolicy/index.js'
 
 // All handlers are scoped to the authenticated user (req.user.id, set by jwtValidation).
 
-// Name and URL must each be unique among the user's OWN websites. Comparison is
-// normalized (trim + lowercase; url also ignores a trailing slash) but the stored value
-// keeps the user's original text. On a collision, throw a 422 in the express-validator
-// shape ({ path, msg }) so the frontend renders it inline under the offending field.
-// `excludeId` skips the row being edited (so a website may keep its own name/url).
 /**
  * Assert a website name and url are each unique among the user's own websites (normalized compare).
  * @param {string} userId - Authenticated req.user.id.
@@ -71,12 +66,8 @@ export const listWebsites = asyncHandler(async (req, res) => {
  */
 export const createWebsite = asyncHandler(async (req, res) => {
   const { name, url } = req.body
-  // Reject a duplicate name/url for this user before creating anything.
   await assertNoDuplicate(req.user.id, name, url)
-  // Effective date defaults to today (server date, ISO YYYY-MM-DD); user can edit later.
   const today = new Date().toISOString().slice(0, 10)
-  // Create the website AND seed its cookie_policy (default content) atomically, so a new
-  // site's editor opens pre-filled instead of blank. Rolls back if either insert fails.
   const website = await websiteRepository.createWithPolicy({
     name,
     url,
@@ -103,8 +94,6 @@ export const createWebsite = asyncHandler(async (req, res) => {
  */
 export const updateWebsite = asyncHandler(async (req, res) => {
   const { name, url } = req.body
-  // Reject collisions with the user's OTHER websites; the row being edited is excluded so
-  // it can keep its own name/url.
   await assertNoDuplicate(req.user.id, name, url, req.params.id)
   const [website] = await websiteRepository.updateByIdForUser(
     req.params.id,

@@ -32,8 +32,6 @@ const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 // CookieYes does) rather than carrying a foreign theme.
 const POLICY_STYLES = '.cookie-policy-p img{max-width:100%;height:auto}'
 
-// "Month DD, YYYY" (e.g. July 10, 2026) — identical to frontend dateUtils.formatLong.
-// Timezone-safe: parse Y/M/D from the ISO string, never new Date('YYYY-MM-DD').
 /**
  * Format an ISO date string as "Month DD, YYYY" (timezone-safe, parsed from the string).
  * @param {string} iso - Date in ISO YYYY-MM-DD form.
@@ -45,7 +43,6 @@ export function formatLongDate(iso) {
   return `${MONTHS[+m[2] - 1]} ${m[3]}, ${m[1]}`
 }
 
-// UTC "today" — consistent with the other controllers' new Date().toISOString().slice.
 /**
  * Today's UTC date as an ISO YYYY-MM-DD string.
  * @returns {string}
@@ -54,8 +51,6 @@ export function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
-// A section is empty (skipped) when it has no heading AND no visible text — same rule
-// as PolicyDocument's hasText.
 /**
  * Report whether HTML has visible text once tags and &nbsp; are stripped (section-skip rule).
  * @param {string} html - HTML fragment to test.
@@ -67,9 +62,6 @@ const hasText = (html) =>
     .replace(/&nbsp;/gi, ' ')
     .trim().length > 0
 
-// Escape text-context values (headings, url). Descriptions are the owner's own Tiptap
-// HTML and are intentionally left as-is (same trust boundary as the app's editor).
-// Exported so the teammate email can render the snippet as visible (non-executing) code.
 /**
  * Escape &, < and > in a text value so it renders as visible, non-executing HTML.
  * @param {*} s - Value to escape (coerced to string).
@@ -78,17 +70,14 @@ const hasText = (html) =>
 export const escapeHtml = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-// Compose the snippet. `imagesById` maps a lowercased image uuid → its data: URI; any
-// /pulse/images/<id> reference with a known id is inlined, unknown ones are left as-is
-// (a single broken <img> beats failing the whole export).
 /**
  * Render a website's saved cookie-policy content as a self-contained HTML export snippet.
- * Skips empty sections and inlines known /pulse/images/<id> references from imagesById.
+ * Skips empty sections and inlines known /pulse/images/<id> references from imagesById; unknown references are left unchanged.
  * @param {object} [options] - Render options.
  * @param {object} [options.content={}] - Saved policy content (sections + effectiveDate).
  * @param {string} [options.url=''] - Website URL shown in the footer.
  * @param {Object<string,string>} [options.imagesById={}] - Lowercased image id → data: URI.
- * @param {string} [options.lastUpdated=''] - ISO date the policy was last edited (for "Last updated").
+ * @param {string} [options.lastUpdated=''] - ISO date the policy was last edited (for "Last updated"), not render time so re-sending never changes it; falls back to today when empty.
  * @returns {string} The composed HTML snippet with images inlined where known.
  */
 export function renderPolicyHtml({
@@ -98,8 +87,6 @@ export function renderPolicyHtml({
   lastUpdated = '',
 } = {}) {
   const effective = formatLongDate(content.effectiveDate || todayISO())
-  // "Last updated" = when the policy was last edited/generated (cookie_policy.updatedAt),
-  // NOT render time — so copying/sending the HTML doesn't change it. Fallback to today.
   const updated = formatLongDate(lastUpdated || todayISO())
 
   const parts = [
@@ -119,7 +106,6 @@ export function renderPolicyHtml({
     parts.push(`<div class="cookie-policy-p">${description}</div>`)
   }
 
-  // Footer — parity with PolicyDocument ("Cookie Policy generated for <url>").
   parts.push('&nbsp;')
   parts.push(
     `<p class="cookie-policy-p">Cookie Policy generated for <span>${escapeHtml(url || 'this website')}</span></p>`,

@@ -3,11 +3,10 @@ import { ApiError } from '../utils/response/index.js'
 
 const ALLOWED = new Set(['image/png', 'image/jpeg'])
 
-// Memory storage (bytes go straight into Postgres bytea). No size limit (per spec);
-// only png/jpeg pass the filter — magic bytes are re-checked in the controller.
 /**
  * Multer middleware that accepts a single png/jpeg upload in the "file" field into memory.
  * Reads the multipart body, rejecting any file whose mimetype is not png/jpeg (no size limit).
+ * The mimetype filter is not authoritative — the controller re-checks the magic bytes.
  * @type {import('express').RequestHandler}
  * @throws {ApiError} 415 - Uploaded file is not PNG or JPEG (passed to multer's callback).
  */
