@@ -56,15 +56,11 @@ const passwordResetVerification = (username, verificationurl) => {
     },
   }
 }
-// "Send code to a teammate" email — a Pulse-branded, self-contained HTML layout that
-// hosts the policy install snippet in a code box. Mailgen's themed action-button body
-// can't express an embedded code block, so this is a hand-built template (sendEmail
-// sends it via the raw-html path below). The snippet is HTML-escaped so it renders as
-// visible text and never executes in the recipient's mail client.
 /**
  * Build a self-contained "add the cookie policy" email that embeds the install snippet as escaped code.
+ * Hand-built rather than Mailgen-themed (a themed body can't hold a code block), so sendEmail dispatches it via its raw-html path.
  * @param {string} url - The teammate's website URL (shown in subject/body; falls back to "your website").
- * @param {string} snippetHtml - The policy HTML snippet, HTML-escaped so it renders as visible text.
+ * @param {string} snippetHtml - The policy HTML snippet, HTML-escaped so it renders as visible text and never executes in the recipient's mail client.
  * @returns {{ subject: string, html: string, text: string }} Ready-to-send raw email payload.
  */
 const policyInstallEmail = (url, snippetHtml) => {
@@ -116,8 +112,6 @@ Need help? If you face any issues, feel free to contact us and we'll help you.`
  * @returns {Promise<void>}
  */
 const sendEmail = async function (options) {
-  // Two paths: a raw html/text payload (e.g. policyInstallEmail) is sent as-is; otherwise
-  // a Mailgen `emailContent` body is themed (the verification/reset emails).
   let htmlEmail = options.html
   let textEmail = options.text
   if (!htmlEmail) {

@@ -9,7 +9,6 @@ import { uploadObject, getObjectBuffer } from '../utils/aws/index.js'
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-// Confirm real image content from the file's magic bytes (defence beyond mimetype).
 /**
  * Detect PNG or JPEG from a buffer's magic bytes (defence beyond the declared mimetype).
  * @param {Buffer} buf - The uploaded file bytes.
@@ -29,8 +28,6 @@ function sniffMime(buf) {
   return null
 }
 
-// The website must be owned by the user; ensure its cookie_policy row exists (the
-// image FK target) even before the first Save. Returns the cookie_policy id.
 /**
  * Assert the website is owned by the user and return its cookie_policy id, creating the row if it doesn't exist yet.
  * @param {string} websiteId - Website id from the route.
@@ -70,7 +67,6 @@ export const uploadImage = asyncHandler(async (req, res) => {
     req.params.websiteId,
     req.user.id,
   )
-  // Upload the bytes to S3 under a unique key, then store the KEY (not the bytes).
   const ext = mime === 'image/png' ? 'png' : 'jpg'
   const key = `policy-images/${uuidv4()}.${ext}`
   await uploadObject(key, req.file.buffer, mime)
@@ -92,12 +88,6 @@ export const uploadImage = asyncHandler(async (req, res) => {
     )
 })
 
-// Owner-scoped read: the image must belong to one of the caller's cookie policies
-// (policy_images → cookie_policy → websites → userId). A non-existent id OR another
-// user's image both return 404 (don't leak which ids exist). jwtValidation sets req.user.
-// The bytes live in a private S3 bucket; we read them and stream them back directly with
-// the row's content type — no presigned URL, no redirect. A given id maps to a fixed,
-// never-changing object, so it's served with a long immutable cache (private = owner-scoped).
 /**
  * Serve an owner-scoped policy image by streaming its bytes from S3 with the row's content type.
  * @param {import('express').Request} req - The Express request.
@@ -119,11 +109,9 @@ export const getImage = asyncHandler(async (req, res) => {
   try {
     buf = await getObjectBuffer(img.key)
   } catch {
-    // Object missing/unreadable in S3 — treat as not found rather than a 500.
     throw new ApiError(404, 'image not found')
   }
   res.set('Content-Type', img.mime)
-  // id → bytes is immutable, so allow aggressive caching; private since it's owner-scoped.
   res.set('Cache-Control', 'private, max-age=31536000, immutable')
   return res.send(buf)
 })

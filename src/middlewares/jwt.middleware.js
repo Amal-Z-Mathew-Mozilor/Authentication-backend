@@ -9,7 +9,7 @@ import { verifyAccess, clearAuthCookies } from '../utils/auth/index.js'
  * @param {import('express').Response} res - Used to clear auth cookies on session invalidation.
  * @param {import('express').NextFunction} next - Called on success.
  * @returns {Promise<void>}
- * @throws {ApiError} 401 - Missing token, expired/invalid token, or session invalidated (iat before cutoff).
+ * @throws {ApiError} 401 - Missing token, expired/invalid token, or session invalidated (iat before the per-user cutoff, e.g. after a password change; auth cookies are cleared so the client can redirect to login).
  * @throws {ApiError} 403 - Token revoked (jti blacklisted in Redis).
  */
 export const jwtValidation = async function (req, res, next) {
@@ -31,8 +31,6 @@ export const jwtValidation = async function (req, res, next) {
   if (exist) {
     throw new ApiError(403, 'token revoked')
   }
-  // per-user iat cutoff: a token issued before the cutoff (e.g. before a password change) is
-  // rejected. Clear the dead cookies and signal the client to redirect to /login.
   const cutoff = await redisClient.get(`session:iat:${decoded.id}`)
   if (cutoff && decoded.iat < Number(cutoff)) {
     clearAuthCookies(res)

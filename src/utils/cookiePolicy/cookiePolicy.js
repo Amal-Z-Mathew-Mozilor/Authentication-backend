@@ -9,8 +9,6 @@ export const SECTIONS = ['aboutCookies', 'useOfCookies', 'cookiePreferences']
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 
-// Collect the ids of every /pulse/images/<uuid> referenced in a string (the saved
-// content JSON). These images are "in use" and must be kept.
 /**
  * Collect the ids of every /pulse/images/<uuid> referenced in a string (the saved content JSON).
  * @param {string} str - Content/HTML to scan (coerced to string).
@@ -23,7 +21,6 @@ export function imageIdsFrom(str) {
   return ids
 }
 
-// Only trust well-formed UUIDs from the client; drop anything else.
 /**
  * Keep only well-formed UUID strings from a client-supplied array and lowercase them.
  * @param {unknown} arr - Candidate array of ids (anything non-array yields []).
@@ -37,13 +34,9 @@ export function sanitizeIds(arr) {
     .map((x) => x.toLowerCase())
 }
 
-// Mark-and-sweep: delete this policy's images that are no longer referenced by the
-// saved content OR any live section editor (keepIds). Always scoped to this policy.
-// Removes the S3 object first (best-effort — a transient S3 error must not block the
-// save; a stray object is harmless), then the DB row.
 /**
  * Delete this policy's images no longer referenced by the saved content or any live editor.
- * Best-effort per object: a transient S3 delete error does not block the DB row cleanup.
+ * Removes the S3 object first, then the DB row; best-effort per object, so a transient S3 delete error does not block the DB row cleanup.
  * @param {string} cookiePolicyId - The owning cookie_policy row id (scopes the sweep).
  * @param {Set<string>} keepIds - Lowercased image ids still in use (content ∪ usedImageIds).
  * @returns {Promise<void>}
@@ -66,7 +59,6 @@ export async function sweepOrphanImages(cookiePolicyId, keepIds) {
   )
 }
 
-// Ownership: the cookie policy is reachable only through a website the user owns.
 /**
  * Assert the website exists and is owned by the given user (reachability gate for its policy).
  * @param {string} websiteId - Website id from the route.
