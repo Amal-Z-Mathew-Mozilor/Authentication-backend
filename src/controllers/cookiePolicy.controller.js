@@ -1,7 +1,6 @@
 import { ApiError, ApiResponse } from '../utils/response/index.js'
 import * as cookiePolicyRepository from '../repositories/cookiePolicy.repository.js'
 import * as websiteRepository from '../repositories/website.repository.js'
-import * as policyImageRepository from '../repositories/policyImage.repository.js'
 import { asyncHandler } from '../utils/async-handler.js'
 import {
   SECTIONS,
@@ -13,8 +12,16 @@ import {
   renderPolicyHtml,
   todayISO,
 } from '../utils/cookiePolicy/index.js'
-import { sendEmail, policyInstallEmail } from '../utils/auth/index.js'
-import { getObjectBuffer } from '../utils/aws/index.js'
+import {
+  sendEmail,
+  policyInstallEmail,
+  policyScriptEmail,
+} from '../utils/auth/index.js'
+import { postScript, buildEmbedTag } from '../utils/scriptGenerator/index.js'
+import 'dotenv/config'
+
+// Environment configuration — all process.env reads live here at the top of the file.
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || ''
 
 /**
  * Fetch a website's saved cookie policy content plus its last-updated timestamp.
@@ -44,7 +51,7 @@ export const getCookiePolicy = asyncHandler(async (req, res) => {
 })
 
 /**
- * Render a website's saved policy as a self-contained HTML snippet with every referenced image inlined as a base64 data URI. Shared by the "HTML format" export and the "send code to a teammate" email so the two outputs are byte-identical; an image whose S3 object can't be fetched is skipped (its /pulse/images URL is left unreplaced) rather than failing the whole export.
+ * Render a website's saved policy as an HTML snippet whose image references are absolute public URLs (${PUBLIC_BASE_URL}/pulse/public/images/<id>), so the pasted policy renders on any host without inlining bytes. Shared by the "HTML format" export and the "send code to a teammate" email so the two outputs are byte-identical.
  * @param {string} websiteId - The owning website id (ownership must already be asserted by the caller).
  * @returns {Promise<{ html: string, url: string }>} The rendered snippet and the website url.
  */
@@ -57,22 +64,14 @@ async function buildPolicyHtml(websiteId) {
     ? new Date(row.updatedAt).toISOString().slice(0, 10)
     : todayISO()
 
-  const imagesById = {}
-  const ids = [...imageIdsFrom(JSON.stringify(content))]
-  if (row?.id && ids.length) {
-    const imgs = await policyImageRepository.findByPolicyAndIds(row.id, ids)
-    for (const img of imgs) {
-      try {
-        const buf = await getObjectBuffer(img.key)
-        imagesById[img.id.toLowerCase()] =
-          `data:${img.mime};base64,${buf.toString('base64')}`
-      } catch {}
-    }
-  }
-
   const url = site?.url || ''
   return {
-    html: renderPolicyHtml({ content, url, imagesById, lastUpdated }),
+    html: renderPolicyHtml({
+      content,
+      url,
+      publicBase: PUBLIC_BASE_URL,
+      lastUpdated,
+    }),
     url,
   }
 }
@@ -106,6 +105,7 @@ export const getCookiePolicyHtml = asyncHandler(async (req, res) => {
  * @param {string} req.params.websiteId - Owning website id.
  * @param {object} req.body - Request body.
  * @param {string} req.body.email - Teammate's email address to send the install snippet to (validated).
+ * @param {string} [req.body.format] - 'html' (default) emails the copy-HTML snippet; 'script' emails the <script> embed tag.
  * @param {string} req.user.id - Authenticated user id (set by jwtValidation).
  * @param {import('express').Response} res - Sends 200 on success.
  * @returns {Promise<void>}
@@ -113,12 +113,48 @@ export const getCookiePolicyHtml = asyncHandler(async (req, res) => {
  */
 export const sendPolicyCode = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
-  const { html, url } = await buildPolicyHtml(req.params.websiteId)
-  const { subject, html: emailHtml, text } = policyInstallEmail(url, html)
+
+  let subject, emailHtml, text
+  if (req.body.format === 'script') {
+    const [site] = await websiteRepository.findUrlById(req.params.websiteId)
+    const scriptTag = buildEmbedTag(req.params.websiteId)
+    ;({
+      subject,
+      html: emailHtml,
+      text,
+    } = policyScriptEmail(site?.url || '', scriptTag))
+  } else {
+    const { html, url } = await buildPolicyHtml(req.params.websiteId)
+    ;({ subject, html: emailHtml, text } = policyInstallEmail(url, html))
+  }
+
   await sendEmail({ email: req.body.email, subject, html: emailHtml, text })
   return res
     .status(200)
     .json(new ApiResponse(200, {}, 'installation code sent sucessfully'))
+})
+
+/**
+ * Return the <script> embed tag for the "Code snippet" add-to-site method. The tag's src points at the script-generator service (GET /scripts/:id.js), which serves the .js stored on the last "Generate cookie policy".
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.params.websiteId - Owning website id (= the embed id).
+ * @param {string} req.user.id - Authenticated user id (set by jwtValidation).
+ * @param {import('express').Response} res - Sends 200 with { script }.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 404 - Website does not exist or is not owned by the user.
+ */
+export const getPolicyScript = asyncHandler(async (req, res) => {
+  await assertOwnedWebsite(req.params.websiteId, req.user.id)
+  const script = buildEmbedTag(req.params.websiteId)
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { script },
+        'cookie policy script generated sucessfully',
+      ),
+    )
 })
 
 /**
@@ -274,6 +310,24 @@ export const putPolicyMeta = asyncHandler(async (req, res) => {
   const keep = imageIdsFrom(JSON.stringify(content))
   for (const id of sanitizeIds(req.body.usedImageIds)) keep.add(id)
   await sweepOrphanImages(policyId, keep)
+
+  // On "Generate cookie policy", (re)generate the embeddable script in S3 via the
+  // Go script-generator service. Best-effort: a script-service outage is logged and
+  // swallowed so it never fails the generate save — the script is rebuilt next generate.
+  if (generated === true) {
+    try {
+      const [site] = await websiteRepository.findUrlById(req.params.websiteId)
+      await postScript({
+        id: req.params.websiteId,
+        url: site?.url || '',
+        lastUpdated: todayISO(),
+        publicBase: PUBLIC_BASE_URL,
+        content,
+      })
+    } catch (err) {
+      console.log('postScript failed:', err.message)
+    }
+  }
 
   return res
     .status(200)

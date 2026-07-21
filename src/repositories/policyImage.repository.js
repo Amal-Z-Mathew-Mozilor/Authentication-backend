@@ -52,6 +52,18 @@ export function findKeyByIdForUser(imageId, userId) {
 }
 
 /**
+ * Resolve an image's S3 key + mime by id alone (no owner scoping) — for the PUBLIC image route.
+ * @param {string} imageId - The image id.
+ * @returns {Promise<Array<{ key: string, mime: string }>>} Zero or one row (empty if missing).
+ */
+export function findKeyById(imageId) {
+  return db
+    .select({ key: policyImages.key, mime: policyImages.mime })
+    .from(policyImages)
+    .where(eq(policyImages.id, imageId))
+}
+
+/**
  * Insert a policy image row (the S3 key + metadata; not the bytes).
  * @param {object} data
  * @param {string} data.cookiePolicyId - The owning cookie_policy id.

@@ -71,19 +71,19 @@ export const escapeHtml = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 /**
- * Render a website's saved cookie-policy content as a self-contained HTML export snippet.
- * Skips empty sections and inlines known /pulse/images/<id> references from imagesById; unknown references are left unchanged.
+ * Render a website's saved cookie-policy content as an HTML export snippet.
+ * Skips empty sections and rewrites each /pulse/images/<id> reference to the absolute public URL ${publicBase}/pulse/public/images/<id> so the pasted policy renders on any host; when publicBase is empty the reference is left unchanged.
  * @param {object} [options] - Render options.
  * @param {object} [options.content={}] - Saved policy content (sections + effectiveDate).
  * @param {string} [options.url=''] - Website URL shown in the footer.
- * @param {Object<string,string>} [options.imagesById={}] - Lowercased image id → data: URI.
+ * @param {string} [options.publicBase=''] - Absolute origin of the public image route (PUBLIC_BASE_URL, no trailing slash); when set, image references become absolute public URLs.
  * @param {string} [options.lastUpdated=''] - ISO date the policy was last edited (for "Last updated"), not render time so re-sending never changes it; falls back to today when empty.
- * @returns {string} The composed HTML snippet with images inlined where known.
+ * @returns {string} The composed HTML snippet with image references rewritten to public URLs.
  */
 export function renderPolicyHtml({
   content = {},
   url = '',
-  imagesById = {},
+  publicBase = '',
   lastUpdated = '',
 } = {}) {
   const effective = formatLongDate(content.effectiveDate || todayISO())
@@ -115,5 +115,7 @@ export function renderPolicyHtml({
   const re = new RegExp(`/pulse/images/(${UUID_RE.source})`, 'gi')
   return parts
     .join('\n')
-    .replace(re, (m, id) => imagesById[id.toLowerCase()] || m)
+    .replace(re, (m, id) =>
+      publicBase ? `${publicBase}/pulse/public/images/${id}` : m,
+    )
 }

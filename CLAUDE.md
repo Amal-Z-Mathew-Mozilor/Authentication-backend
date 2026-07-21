@@ -35,15 +35,15 @@ db/redis healthchecks, and connects by service name (`db:5432`, `redis:6379`).
 
 ```
 src/
-├── app.js                       # express app, mounts /pulse/users + /pulse/websites + /pulse/images, global error handler, listen
+├── app.js                       # express app, mounts /pulse/users + /pulse/websites + /pulse/images + /pulse/public/images, global error handler, listen
 ├── routes/auth.routes.js        # all auth routes + their middleware chains
 ├── routes/website.routes.js     # /pulse/websites CRUD + nested cookie-policy routes (all behind jwtValidation)
 ├── controllers/auth.controller.js   # signup, verifyMail, login, logout, forgot/reset, rotateToken,
 │                                     # changePassword, me, resendVerification, resetResend
 ├── controllers/website.controller.js # listWebsites, createWebsite, updateWebsite, deleteWebsite (user-scoped)
 ├── controllers/cookiePolicy.controller.js # getCookiePolicy, getCookiePolicyHtml (self-contained HTML export), sendPolicyCode (email the HTML to a teammate), putSection (per-section jsonb upsert), putPolicyMeta (effectiveDate); ownership-checked
-├── controllers/image.controller.js  # uploadImage (multer→S3 PutObject, stores key), getImage (reads S3 bytes → streams them with Content-Type)
-├── routes/image.routes.js       # GET /pulse/images/:id — auth'd, owner-scoped image serve
+├── controllers/image.controller.js  # uploadImage (multer→S3 PutObject, stores key), getImage (auth'd, owner-scoped bytes), getPublicImage (unauth'd public bytes for the export)
+├── routes/image.routes.js       # image_route: GET /pulse/images/:id (auth'd, owner-scoped); public_image_route: GET /pulse/public/images/:id (unauth'd)
 ├── middlewares/upload.middleware.js  # multer memory storage, png/jpeg filter (imageUpload)
 ├── middlewares/
 │   ├── auth.middleware.js        # validation() — turns express-validator errors into 422
@@ -118,13 +118,18 @@ More sections add sibling keys with no migration. Routes (nested, behind
 website's owner): `GET /cookie-policy` returns the whole `content` (or `{}`) **plus
 `updatedAt`** (the row's last edit/generate time — the rendered "Last updated" derives from
 it, so copying/sending the HTML never changes it);
-`GET /cookie-policy/html` returns `{ html }` — the saved policy rendered as a
-**self-contained HTML snippet** (styles + heading + dates + non-empty sections + footer,
+`GET /cookie-policy/html` returns `{ html }` — the saved policy rendered as an
+HTML snippet (styles + heading + dates + non-empty sections + footer,
 Start/End markers) for the "HTML format" add-to-site export, with every `/pulse/images/:id`
-reference **inlined as a base64 `data:` URI** so it renders on any host (see `utils/cookiePolicy/policyHtml.js`);
+reference **rewritten to the absolute public URL `${PUBLIC_BASE_URL}/pulse/public/images/:id`**
+(served by the unauth'd public image route) so the pasted policy renders on any host — images
+therefore require the backend to be publicly reachable at `PUBLIC_BASE_URL` (was base64-inlined
+before; see `utils/cookiePolicy/policyHtml.js`);
 `POST /cookie-policy/send-code` (body `{ email }`, validated) emails that same snippet to a
 teammate in a Pulse-branded template (`policyInstallEmail` in `utils/auth/mail.js`, via the raw-html
-`sendEmail` path) — mail-transport errors are swallowed so a mail outage still returns `200`;
+`sendEmail` path) — the snippet is shown **inline in a `<pre>` code box** (escaped); safe from
+mail-client clipping because images are now public URLs (not base64), so the snippet is small;
+mail-transport errors are swallowed so a mail outage still returns `200`;
 `PUT /cookie-policy/:section` upserts one section (body `{ heading, description }`);
 `PUT /cookie-policy` (base path, no `:section`) upserts policy meta (body
 `{ effectiveDate }`, plus optional `generated: true` → stamps `generatedAt` = now). Both
@@ -155,9 +160,15 @@ not-owned → `404`, unreadable S3 object → `404`): it **reads the object's by
 (`getObjectBuffer`) and streams them back directly** — `200` with `Content-Type:
 image/png|jpeg` and `Cache-Control: private, max-age=31536000, immutable` (a given id maps
 to a fixed object; `private` because owner-scoped). **No presigned URL, no `302`.** The
-editor/preview `<img>` requests carry the `accessToken` cookie automatically (same-site);
-the HTML export inlines base64 server-side (same `getObjectBuffer`), so pasted policy pages
-never hit this route. See `utils/aws/s3.js`,
+editor/preview `<img>` requests carry the `accessToken` cookie automatically (same-site).
+**`GET /pulse/public/images/:id`** is the **public, unauthenticated** counterpart (`getPublicImage`
+→ `policyImage.repository.findKeyById`, no owner join): it streams the same bytes from the
+**still-private** S3 bucket (read server-side; bucket never made public) with `Cache-Control:
+public, …`, so the **HTML export/email reference these absolute public URLs** (`${PUBLIC_BASE_URL}
+/pulse/public/images/:id`) and render on any host. Trade-off: anyone with the UUID link can fetch
+(cookie-policy images are public-by-intent); this deliberately relaxes the auth'd route's scoping
+for the export path only. See `utils/aws/s3.js`,
+`cookiegenerator-plan/public-image-url-export.md`,
 `cookiegenerator-plan/image-serve-bytes-drop-presigned.md`, and
 `cookiegenerator-plan/s3-image-storage.md`.
 
@@ -250,8 +261,13 @@ route or `res.redirect` to the frontend.
 `PORT`, `NODE_ENV`, `ACCESS_SECRETKEY`, `REFRESH_SECRETKEY`, `ACCESS_EXPIRY`, `REFRESH_EXPIRY`,
 `DATABASE_URL`, `REDIS_URL`, `MAIL_HOST`/`MAIL_PORT`/`MAIL_USER`/`MAIL_PASSWORD`,
 `ALLOWED_VERIFY_BASES`, `ALLOWED_RESET_BASES`, `TRUST_PROXY_HOPS`, `COOKIE_SAMESITE`, `CORS_ORIGINS`,
-`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET` (+ optional
+`PUBLIC_BASE_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET` (+ optional
 `S3_ENDPOINT`).
+
+- **`PUBLIC_BASE_URL`** — absolute origin of **this backend** (no trailing slash), used to build
+  the absolute public image URLs (`${PUBLIC_BASE_URL}/pulse/public/images/<id>`) embedded in the
+  exported/emailed cookie policy. Must be a **publicly reachable HTTPS** origin in prod (e.g.
+  `https://api.example.com`); on `localhost` those images only load on this machine.
 
 - **`AWS_*` / `S3_*`** — S3 storage for cookie-policy images (`utils/aws/s3.js`). Standard AWS var
   names so the SDK's default credential chain finds them; `S3_BUCKET` is the **bare bucket name**

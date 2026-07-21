@@ -16,6 +16,7 @@ import {
 import {
   getCookiePolicy,
   getCookiePolicyHtml,
+  getPolicyScript,
   sendPolicyCode,
   putSection,
   putPolicyMeta,
@@ -51,6 +52,12 @@ website_route.get(
   '/:websiteId/cookie-policy/html',
   jwtValidation,
   getCookiePolicyHtml,
+)
+// <script> embed tag for the "Code snippet" add-to-site option.
+website_route.get(
+  '/:websiteId/cookie-policy/script',
+  jwtValidation,
+  getPolicyScript,
 )
 // Email that HTML snippet to a teammate ("Send code to a teammate").
 website_route.post(

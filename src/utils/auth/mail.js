@@ -57,8 +57,9 @@ const passwordResetVerification = (username, verificationurl) => {
   }
 }
 /**
- * Build a self-contained "add the cookie policy" email that embeds the install snippet as escaped code.
+ * Build the "add the cookie policy" email with the install snippet shown inline in a code box.
  * Hand-built rather than Mailgen-themed (a themed body can't hold a code block), so sendEmail dispatches it via its raw-html path.
+ * Inlining is safe because images are now referenced by public URL (not base64), so the snippet is small — no mail-client clipping.
  * @param {string} url - The teammate's website URL (shown in subject/body; falls back to "your website").
  * @param {string} snippetHtml - The policy HTML snippet, HTML-escaped so it renders as visible text and never executes in the recipient's mail client.
  * @returns {{ subject: string, html: string, text: string }} Ready-to-send raw email payload.
@@ -95,6 +96,50 @@ You'll need to manually update this code on your site whenever the cookie policy
 2. Paste it into the relevant section of your website where you want the policy to appear.
 
 ${snippetHtml}
+
+Need help? If you face any issues, feel free to contact us and we'll help you.`
+  return { subject, html, text }
+}
+
+/**
+ * Build the "add the cookie policy as a script" email with the <script> embed shown inline in a code box.
+ * Companion to policyInstallEmail for the "Code snippet" method: the embedded script auto-updates whenever the policy is re-generated, so no manual re-paste is needed.
+ * @param {string} url - The teammate's website URL (shown in subject/body; falls back to "your website").
+ * @param {string} scriptTag - The <script> embed snippet, HTML-escaped so it renders as visible text and never executes in the recipient's mail client.
+ * @returns {{ subject: string, html: string, text: string }} Ready-to-send raw email payload.
+ */
+const policyScriptEmail = (url, scriptTag) => {
+  const safeUrl = escapeHtml(url || 'your website')
+  const subject = `Add the cookie policy to ${url || 'your website'}`
+  const html = `<div style="max-width:640px;margin:0 auto;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#1f2733;line-height:1.6">
+  <div style="text-align:center;padding:24px 0"><span style="font-size:24px;font-weight:800;color:#3b6ef0">Pulse</span></div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:28px 30px">
+    <h1 style="margin:0 0 20px;font-size:22px;line-height:1.35;color:#1f2733">Add a cookie policy on your website ${safeUrl}</h1>
+    <p style="margin:0 0 14px">Hi there,</p>
+    <p style="margin:0 0 22px">Your teammate has generated a cookie policy using Pulse and needs your help to add it to the site <a href="${safeUrl}" style="color:#3b6ef0">${safeUrl}</a>.</p>
+    <h2 style="margin:0 0 8px;font-size:17px;color:#1f2733">Add as a code snippet</h2>
+    <p style="margin:0 0 8px">This script keeps your cookie policy up to date automatically — you only paste it once.</p>
+    <ol style="margin:0 0 18px;padding-left:20px">
+      <li>Copy the script snippet provided below.</li>
+      <li>Paste it into the &lt;head&gt; section of your website.</li>
+    </ol>
+    <pre style="margin:0 0 22px;padding:14px 16px;max-height:320px;overflow:auto;background:#f4f6f8;border:1px solid #e5e7eb;border-radius:9px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;color:#1f2733;white-space:pre-wrap;word-break:break-word">${escapeHtml(scriptTag)}</pre>
+    <h2 style="margin:0 0 8px;font-size:17px;color:#1f2733">Need help?</h2>
+    <p style="margin:0">If you face any issues, feel free to <a href="http://localhost:5173/" style="color:#3b6ef0">contact us</a> and we'll help you.</p>
+  </div>
+</div>`
+  const text = `Add a cookie policy on your website ${url || 'your website'}
+
+Hi there,
+
+Your teammate has generated a cookie policy using Pulse and needs your help to add it to the site ${url || 'your website'}.
+
+Add as a code snippet
+This script keeps your cookie policy up to date automatically — you only paste it once.
+1. Copy the script snippet provided below.
+2. Paste it into the <head> section of your website.
+
+${scriptTag}
 
 Need help? If you face any issues, feel free to contact us and we'll help you.`
   return { subject, html, text }
@@ -151,5 +196,6 @@ export {
   emailVerification,
   passwordResetVerification,
   policyInstallEmail,
+  policyScriptEmail,
   sendEmail,
 }

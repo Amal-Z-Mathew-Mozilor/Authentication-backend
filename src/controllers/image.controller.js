@@ -115,3 +115,28 @@ export const getImage = asyncHandler(async (req, res) => {
   res.set('Cache-Control', 'private, max-age=31536000, immutable')
   return res.send(buf)
 })
+
+/**
+ * Serve a policy image PUBLICLY (no auth, no ownership) by streaming its bytes from the private S3 bucket.
+ * Backs the absolute ${PUBLIC_BASE_URL}/pulse/public/images/<id> references in the exported/emailed policy so it renders on any host; the bucket stays private (bytes are read server-side). Anyone with the UUID link can fetch — cookie-policy images are public-by-intent (embedded on a public policy page).
+ * @param {import('express').Request} req - The Express request.
+ * @param {string} req.params.id - Image id (UUID) to serve.
+ * @param {import('express').Response} res - Sends the image bytes with Content-Type + public immutable Cache-Control.
+ * @returns {Promise<void>}
+ * @throws {ApiError} 404 - Malformed id, image not found, or its S3 object is unreadable.
+ */
+export const getPublicImage = asyncHandler(async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) throw new ApiError(404, 'image not found')
+  const [img] = await policyImageRepository.findKeyById(req.params.id)
+  if (!img) throw new ApiError(404, 'image not found')
+
+  let buf
+  try {
+    buf = await getObjectBuffer(img.key)
+  } catch {
+    throw new ApiError(404, 'image not found')
+  }
+  res.set('Content-Type', img.mime)
+  res.set('Cache-Control', 'public, max-age=31536000, immutable')
+  return res.send(buf)
+})

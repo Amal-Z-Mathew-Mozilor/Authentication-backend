@@ -62,19 +62,27 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 201, data: {}, message: "Account created successfully. Please verify your email.", sucess: true }
+              example:
+                {
+                  statuscode: 201,
+                  data: {},
+                  message: 'Account created successfully. Please verify your email.',
+                  sucess: true,
+                }
         '400':
           description: '`verifyBase` not allowed.'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "invalid verify url", errors: [] }
+              example:
+                { success: false, message: 'invalid verify url', errors: [] }
         '409':
           description: Email already exists.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "email already exist", errors: [] }
+              example:
+                { success: false, message: 'email already exist', errors: [] }
         '422':
           description: Validation failed (email/password policy).
           content:
@@ -98,21 +106,34 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 200, data: {}, message: "verified", sucess: true }
+              example:
+                { statuscode: 200, data: {}, message: 'verified', sucess: true }
         '401':
           description: Token expired or already used.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               examples:
-                expired: { value: { success: false, message: "Token expired", errors: [] } }
-                used: { value: { success: false, message: "token already used", errors: [] } }
+                expired:
+                  {
+                    value:
+                      { success: false, message: 'Token expired', errors: [] },
+                  }
+                used:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: 'token already used',
+                        errors: [],
+                      },
+                  }
         '403':
           description: Token not found / invalid.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "Invalid Token", errors: [] }
+              example: { success: false, message: 'Invalid Token', errors: [] }
 
   /pulse/users/resend/{token}:
     post:
@@ -129,34 +150,62 @@ paths:
               type: object
               required: [verifyBase]
               properties:
-                verifyBase: { type: string, example: http://localhost:5173/verify }
+                verifyBase:
+                  { type: string, example: http://localhost:5173/verify }
       responses:
         '200':
           description: A new verification email has been sent.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 200, data: {}, message: "A new verification email has been sent.", sucess: true }
+              example:
+                {
+                  statuscode: 200,
+                  data: {},
+                  message: 'A new verification email has been sent.',
+                  sucess: true,
+                }
         '400':
           description: '`verifyBase` not allowed, or user not found.'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               examples:
-                badVerifyBase: { value: { success: false, message: "invalid verify url", errors: [] } }
-                userNotFound: { value: { success: false, message: "user doesn't exist", errors: [] } }
+                badVerifyBase:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: 'invalid verify url',
+                        errors: [],
+                      },
+                  }
+                userNotFound:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: "user doesn't exist",
+                        errors: [],
+                      },
+                  }
         '403':
           description: Invalid token (not found).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "invalid token", errors: [] }
+              example: { success: false, message: 'invalid token', errors: [] }
         '409':
           description: Email already verified.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "email already verified", errors: [] }
+              example:
+                {
+                  success: false,
+                  message: 'email already verified',
+                  errors: [],
+                }
 
   /pulse/users/login:
     post:
@@ -183,19 +232,27 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 200, data: {}, message: "login sucessfull", sucess: true }
+              example:
+                {
+                  statuscode: 200,
+                  data: {},
+                  message: 'login sucessfull',
+                  sucess: true,
+                }
         '401':
           description: Invalid credentials.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "Invalid credentials", errors: [] }
+              example:
+                { success: false, message: 'Invalid credentials', errors: [] }
         '403':
           description: Email not verified.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "pls verify email", errors: [] }
+              example:
+                { success: false, message: 'pls verify email', errors: [] }
         '422':
           description: Email validation failed.
           content:
@@ -209,8 +266,24 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/RateLimitErrorResponse' }
               examples:
-                ipLimit: { value: { success: false, message: "Too many login attempts.", errors: { retryAfter: 118 } } }
-                accountLocked: { value: { success: false, message: "Account is locked. Too many failed attempts.", errors: { retryAfter: 120 } } }
+                ipLimit:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: 'Too many login attempts.',
+                        errors: { retryAfter: 118 },
+                      },
+                  }
+                accountLocked:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: 'Account is locked. Too many failed attempts.',
+                        errors: { retryAfter: 120 },
+                      },
+                  }
 
   /pulse/users/logout:
     post:
@@ -225,7 +298,13 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 200, data: {}, message: "logout sucessful", sucess: true }
+              example:
+                {
+                  statuscode: 200,
+                  data: {},
+                  message: 'logout sucessful',
+                  sucess: true,
+                }
         '401':
           description: Missing/invalid token.
           content:
@@ -247,15 +326,33 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 200, data: {}, message: "token rotated sucessfully", sucess: true }
+              example:
+                {
+                  statuscode: 200,
+                  data: {},
+                  message: 'token rotated sucessfully',
+                  sucess: true,
+                }
         '401':
           description: Refresh token missing or invalid.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               examples:
-                missing: { value: { success: false, message: "Refresh token missing", errors: [] } }
-                invalid: { value: { success: false, message: "invalid token", errors: [] } }
+                missing:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: 'Refresh token missing',
+                        errors: [],
+                      },
+                  }
+                invalid:
+                  {
+                    value:
+                      { success: false, message: 'invalid token', errors: [] },
+                  }
 
   /pulse/users/forgotPassword:
     post:
@@ -273,20 +370,28 @@ paths:
               required: [email, resetBase]
               properties:
                 email: { type: string, format: email }
-                resetBase: { type: string, example: http://localhost:5173/resetPassword }
+                resetBase:
+                  { type: string, example: http://localhost:5173/resetPassword }
       responses:
         '200':
           description: Neutral acknowledgement (sent if the email exists).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 200, data: {}, message: "If the email exists, a reset link has been sent", sucess: true }
+              example:
+                {
+                  statuscode: 200,
+                  data: {},
+                  message: 'If the email exists, a reset link has been sent',
+                  sucess: true,
+                }
         '400':
           description: '`resetBase` not allowed.'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "invalid reset url", errors: [] }
+              example:
+                { success: false, message: 'invalid reset url', errors: [] }
         '422':
           description: Email validation failed.
           content:
@@ -309,21 +414,34 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 200, data: {}, message: "valid", sucess: true }
+              example:
+                { statuscode: 200, data: {}, message: 'valid', sucess: true }
         '401':
           description: Token expired or already used.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               examples:
-                expired: { value: { success: false, message: "Token expired", errors: [] } }
-                used: { value: { success: false, message: "token already is used", errors: [] } }
+                expired:
+                  {
+                    value:
+                      { success: false, message: 'Token expired', errors: [] },
+                  }
+                used:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: 'token already is used',
+                        errors: [],
+                      },
+                  }
         '403':
           description: Token not found / invalid.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "Invalid Token", errors: [] }
+              example: { success: false, message: 'Invalid Token', errors: [] }
 
   /pulse/users/resetPassword/{token}:
     post:
@@ -351,30 +469,72 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 200, data: {}, message: "password updated sucessfully", sucess: true }
+              example:
+                {
+                  statuscode: 200,
+                  data: {},
+                  message: 'password updated sucessfully',
+                  sucess: true,
+                }
         '400':
           description: Passwords don't match, same as old, email mismatch, or user not found.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               examples:
-                mismatch: { value: { success: false, message: "Passwords doesn't match", errors: [] } }
-                sameAsOld: { value: { success: false, message: "password cannot be same as old password", errors: [] } }
-                emailMismatch: { value: { success: false, message: "invalid credential", errors: [] } }
+                mismatch:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: "Passwords doesn't match",
+                        errors: [],
+                      },
+                  }
+                sameAsOld:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: 'password cannot be same as old password',
+                        errors: [],
+                      },
+                  }
+                emailMismatch:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: 'invalid credential',
+                        errors: [],
+                      },
+                  }
         '401':
           description: Token expired or already used.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               examples:
-                expired: { value: { success: false, message: "Token expired", errors: [] } }
-                used: { value: { success: false, message: "token already is used", errors: [] } }
+                expired:
+                  {
+                    value:
+                      { success: false, message: 'Token expired', errors: [] },
+                  }
+                used:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: 'token already is used',
+                        errors: [],
+                      },
+                  }
         '403':
           description: Token not found / invalid.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "Invalid Token", errors: [] }
+              example: { success: false, message: 'Invalid Token', errors: [] }
         '422':
           description: Password policy validation failed (per field).
           content:
@@ -396,28 +556,51 @@ paths:
               type: object
               required: [resetBase]
               properties:
-                resetBase: { type: string, example: http://localhost:5173/resetPassword }
+                resetBase:
+                  { type: string, example: http://localhost:5173/resetPassword }
       responses:
         '200':
           description: A new password reset email has been sent.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 200, data: {}, message: "A new password reset email has been sent.", sucess: true }
+              example:
+                {
+                  statuscode: 200,
+                  data: {},
+                  message: 'A new password reset email has been sent.',
+                  sucess: true,
+                }
         '400':
           description: '`resetBase` not allowed, or user not found.'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               examples:
-                badResetBase: { value: { success: false, message: "invalid reset url", errors: [] } }
-                userNotFound: { value: { success: false, message: "user doesn't exist", errors: [] } }
+                badResetBase:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: 'invalid reset url',
+                        errors: [],
+                      },
+                  }
+                userNotFound:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: "user doesn't exist",
+                        errors: [],
+                      },
+                  }
         '403':
           description: Invalid token (not found).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "invalid token", errors: [] }
+              example: { success: false, message: 'invalid token', errors: [] }
 
   /pulse/users/changePassword:
     post:
@@ -443,16 +626,46 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 200, data: {}, message: "password reseted sucessfully", sucess: true }
+              example:
+                {
+                  statuscode: 200,
+                  data: {},
+                  message: 'password reseted sucessfully',
+                  sucess: true,
+                }
         '400':
           description: Old password wrong, new≠confirm, or same as old.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               examples:
-                oldWrong: { value: { success: false, message: "old password doesnt match", errors: [] } }
-                mismatch: { value: { success: false, message: "new and confirm password are wrong", errors: [] } }
-                sameAsOld: { value: { success: false, message: "new password must not be same as old one", errors: [] } }
+                oldWrong:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: 'old password doesnt match',
+                        errors: [],
+                      },
+                  }
+                mismatch:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: 'new and confirm password are wrong',
+                        errors: [],
+                      },
+                  }
+                sameAsOld:
+                  {
+                    value:
+                      {
+                        success: false,
+                        message: 'new password must not be same as old one',
+                        errors: [],
+                      },
+                  }
         '401':
           description: Not authenticated (missing/expired/invalid token).
           content:
@@ -463,7 +676,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "token revoked", errors: [] }
+              example: { success: false, message: 'token revoked', errors: [] }
         '422':
           description: Password policy validation failed (per field).
           content:
@@ -488,7 +701,13 @@ paths:
                   - type: object
                     properties:
                       data: { type: string, example: you@domain.com }
-              example: { statuscode: 200, data: "you@domain.com", message: "user authenticated sucessfully", sucess: true }
+              example:
+                {
+                  statuscode: 200,
+                  data: 'you@domain.com',
+                  message: 'user authenticated sucessfully',
+                  sucess: true,
+                }
         '401':
           description: Not authenticated.
           content:
@@ -516,8 +735,14 @@ paths:
               example:
                 statuscode: 200
                 data:
-                  - { id: "b1c2…", name: "My site", url: "https://example.com", createdAt: "2026-07-08T10:00:00.000Z", updatedAt: "2026-07-08T10:00:00.000Z" }
-                message: "websites fetched sucessfully"
+                  - {
+                      id: 'b1c2…',
+                      name: 'My site',
+                      url: 'https://example.com',
+                      createdAt: '2026-07-08T10:00:00.000Z',
+                      updatedAt: '2026-07-08T10:00:00.000Z',
+                    }
+                message: 'websites fetched sucessfully'
                 sucess: true
         '401':
           description: Not authenticated (missing/expired/invalid token).
@@ -529,7 +754,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "token revoked", errors: [] }
+              example: { success: false, message: 'token revoked', errors: [] }
     post:
       tags: [Websites]
       summary: Add a website
@@ -557,8 +782,14 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example:
                 statuscode: 201
-                data: { id: "b1c2…", name: "My site", url: "https://example.com", createdAt: "2026-07-08T10:00:00.000Z" }
-                message: "website added sucessfully"
+                data:
+                  {
+                    id: 'b1c2…',
+                    name: 'My site',
+                    url: 'https://example.com',
+                    createdAt: '2026-07-08T10:00:00.000Z',
+                  }
+                message: 'website added sucessfully'
                 sucess: true
         '401':
           description: Not authenticated.
@@ -605,7 +836,19 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 200, data: { id: "b1c2…", name: "New name", url: "https://example.com", updatedAt: "2026-07-08T10:05:00.000Z" }, message: "website updated sucessfully", sucess: true }
+              example:
+                {
+                  statuscode: 200,
+                  data:
+                    {
+                      id: 'b1c2…',
+                      name: 'New name',
+                      url: 'https://example.com',
+                      updatedAt: '2026-07-08T10:05:00.000Z',
+                    },
+                  message: 'website updated sucessfully',
+                  sucess: true,
+                }
         '401':
           description: Not authenticated.
           content:
@@ -621,7 +864,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "website not found", errors: [] }
+              example:
+                { success: false, message: 'website not found', errors: [] }
         '422':
           description: Validation failed (name/url).
           content:
@@ -647,7 +891,13 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 200, data: {}, message: "website deleted sucessfully", sucess: true }
+              example:
+                {
+                  statuscode: 200,
+                  data: {},
+                  message: 'website deleted sucessfully',
+                  sucess: true,
+                }
         '401':
           description: Not authenticated.
           content:
@@ -663,7 +913,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "website not found", errors: [] }
+              example:
+                { success: false, message: 'website not found', errors: [] }
 
   /pulse/websites/{websiteId}/cookie-policy:
     parameters:
@@ -690,8 +941,30 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example:
                 statuscode: 200
-                data: { content: { aboutCookies: { heading: "What are cookies?", description: "This Cookie Policy explains…" }, useOfCookies: { heading: "How do we use cookies?", description: "Like most online services…" }, cookiePreferences: { heading: "Manage cookie preferences", description: "You can modify your cookie settings…" }, effectiveDate: "2026-07-07", completedSections: [aboutCookies, useOfCookies] } }
-                message: "cookie policy fetched sucessfully"
+                data:
+                  {
+                    content:
+                      {
+                        aboutCookies:
+                          {
+                            heading: 'What are cookies?',
+                            description: 'This Cookie Policy explains…',
+                          },
+                        useOfCookies:
+                          {
+                            heading: 'How do we use cookies?',
+                            description: 'Like most online services…',
+                          },
+                        cookiePreferences:
+                          {
+                            heading: 'Manage cookie preferences',
+                            description: 'You can modify your cookie settings…',
+                          },
+                        effectiveDate: '2026-07-07',
+                        completedSections: [aboutCookies, useOfCookies],
+                      },
+                  }
+                message: 'cookie policy fetched sucessfully'
                 sucess: true
         '401':
           description: Not authenticated.
@@ -708,7 +981,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "website not found", errors: [] }
+              example:
+                { success: false, message: 'website not found', errors: [] }
     put:
       tags: [Cookie Policy]
       summary: Save policy-level metadata (effective date; optionally mark generated)
@@ -733,7 +1007,7 @@ paths:
                 effectiveDate:
                   type: string
                   format: date
-                  example: "2026-07-07"
+                  example: '2026-07-07'
                   description: ISO calendar date (YYYY-MM-DD).
                 generated:
                   type: boolean
@@ -757,8 +1031,15 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example:
                 statuscode: 200
-                data: { content: { effectiveDate: "2026-07-07", generatedAt: "2026-07-09T10:15:00.000Z" } }
-                message: "cookie policy updated sucessfully"
+                data:
+                  {
+                    content:
+                      {
+                        effectiveDate: '2026-07-07',
+                        generatedAt: '2026-07-09T10:15:00.000Z',
+                      },
+                  }
+                message: 'cookie policy updated sucessfully'
                 sucess: true
         '401':
           description: Not authenticated.
@@ -802,8 +1083,29 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example:
                 statuscode: 200
-                data: { content: { aboutCookies: { heading: "What are cookies?", description: "This Cookie Policy explains…" }, useOfCookies: { heading: "How do we use cookies?", description: "Like most online services…" }, cookiePreferences: { heading: "Manage cookie preferences", description: "You can modify your cookie settings…" }, effectiveDate: "2026-07-09" } }
-                message: "cookie policy deleted sucessfully"
+                data:
+                  {
+                    content:
+                      {
+                        aboutCookies:
+                          {
+                            heading: 'What are cookies?',
+                            description: 'This Cookie Policy explains…',
+                          },
+                        useOfCookies:
+                          {
+                            heading: 'How do we use cookies?',
+                            description: 'Like most online services…',
+                          },
+                        cookiePreferences:
+                          {
+                            heading: 'Manage cookie preferences',
+                            description: 'You can modify your cookie settings…',
+                          },
+                        effectiveDate: '2026-07-09',
+                      },
+                  }
+                message: 'cookie policy deleted sucessfully'
                 sucess: true
         '401':
           description: Not authenticated.
@@ -820,7 +1122,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "website not found", errors: [] }
+              example:
+                { success: false, message: 'website not found', errors: [] }
   /pulse/websites/{websiteId}/cookie-policy/html:
     parameters:
       - name: websiteId
@@ -830,15 +1133,18 @@ paths:
         schema: { type: string, format: uuid }
     get:
       tags: [Cookie Policy]
-      summary: Export the cookie policy as self-contained HTML
+      summary: Export the cookie policy as HTML
       description: >
-        Renders the SAVED cookie policy as a single self-contained HTML snippet the
-        owner can paste onto their own site (the "HTML format" add-to-site option).
-        Mirrors the on-screen preview: a light `<style>`, `<h1>Cookie Policy</h1>`, the
-        effective/last-updated dates, each non-empty section's heading + rich-text body,
-        and a footer, wrapped in `<!-- Start/End Pulse cookie policy -->` markers. Every
-        `/pulse/images/{id}` reference is inlined as a base64 `data:` URI so the snippet
-        renders anywhere (a referenced-but-missing image is left as its original URL).
+        Renders the SAVED cookie policy as a single HTML snippet the owner can paste onto
+        their own site (the "HTML format" add-to-site option). Mirrors the on-screen preview:
+        a light `<style>`, `<h1>Cookie Policy</h1>`, the effective/last-updated dates, each
+        non-empty section's heading + rich-text body, and a footer, wrapped in
+        `<!-- Start/End Pulse cookie policy -->` markers. Every `/pulse/images/{id}` reference
+        is rewritten to the absolute PUBLIC URL `${PUBLIC_BASE_URL}/pulse/public/images/{id}`
+        (served by the unauthenticated public image route) so the pasted policy renders on any
+        host — images therefore require the backend to be publicly reachable at
+        `PUBLIC_BASE_URL`. (Previously images were inlined as base64; that was replaced to keep
+        the snippet small.)
       security:
         - accessTokenCookie: []
       responses:
@@ -849,8 +1155,11 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example:
                 statuscode: 200
-                data: { html: "<!-- Start Pulse cookie policy -->\n<style>.cookie-policy-p img{max-width:100%;height:auto}</style>\n<h1 class=\"cookie-policy-h1\">Cookie Policy</h1>\n<div class=\"cookie-policy-date-container\"><p>Effective date: July 10, 2026</p><p>Last updated: July 10, 2026</p></div>\n&nbsp;\n<h2>What are cookies?</h2>\n<div class=\"cookie-policy-p\"><p>This Cookie Policy explains…</p></div>\n&nbsp;\n<p class=\"cookie-policy-p\">Cookie Policy generated for <span>https://example.com</span></p>\n<!-- End Pulse cookie policy -->" }
-                message: "cookie policy html generated sucessfully"
+                data:
+                  {
+                    html: "<!-- Start Pulse cookie policy -->\n<style>.cookie-policy-p img{max-width:100%;height:auto}</style>\n<h1 class=\"cookie-policy-h1\">Cookie Policy</h1>\n<div class=\"cookie-policy-date-container\"><p>Effective date: July 10, 2026</p><p>Last updated: July 10, 2026</p></div>\n&nbsp;\n<h2>What are cookies?</h2>\n<div class=\"cookie-policy-p\"><p>This Cookie Policy explains…</p></div>\n&nbsp;\n<p class=\"cookie-policy-p\">Cookie Policy generated for <span>https://example.com</span></p>\n<!-- End Pulse cookie policy -->",
+                  }
+                message: 'cookie policy html generated sucessfully'
                 sucess: true
         '401':
           description: Not authenticated.
@@ -867,7 +1176,58 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "website not found", errors: [] }
+              example:
+                { success: false, message: 'website not found', errors: [] }
+  /pulse/websites/{websiteId}/cookie-policy/script:
+    parameters:
+      - name: websiteId
+        in: path
+        required: true
+        description: The website id (uuid).
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Cookie Policy]
+      summary: Get the cookie policy script embed tag
+      description: >
+        Returns the `<script>` embed tag for the "Code snippet" add-to-site option. The tag's
+        `src` points at the Go script-generator service
+        (`${SCRIPT_SERVICE_PUBLIC_URL}/scripts/{websiteId}.js`), which serves the embeddable
+        `.js` last stored on "Generate cookie policy". Pasting the tag into a site `<head>`
+        injects the rendered policy and auto-updates whenever the policy is re-generated. This
+        endpoint only builds the tag string; the `.js` itself is produced by the script service.
+      security:
+        - accessTokenCookie: []
+      responses:
+        '200':
+          description: The script embed tag.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SuccessResponse' }
+              example:
+                statuscode: 200
+                data:
+                  {
+                    script: "<!-- Start Pulse cookie policy -->\n<script id=\"pulse-cookie-policy\" type=\"text/javascript\" src=\"https://scripts.example.com/scripts/2f1c…e9.js\"></script>\n<!-- End Pulse cookie policy -->",
+                  }
+                message: 'cookie policy script generated sucessfully'
+                sucess: true
+        '401':
+          description: Not authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Token revoked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Website not found (or not owned by the user).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                { success: false, message: 'website not found', errors: [] }
   /pulse/websites/{websiteId}/cookie-policy/send-code:
     parameters:
       - name: websiteId
@@ -879,11 +1239,12 @@ paths:
       tags: [Cookie Policy]
       summary: Email the cookie policy install code to a teammate
       description: >
-        Generates the same self-contained HTML snippet as `GET …/cookie-policy/html`
-        and emails it to the given address in a Pulse-branded template (title, "Add as
-        HTML" instructions, the escaped snippet in a code box). Uses the server's
-        nodemailer transport; mail-transport errors are swallowed (logged, not thrown),
-        so a mail outage still returns `200` once dispatch is attempted.
+        Emails the install snippet to the given address in a Pulse-branded template (title,
+        instructions, the escaped snippet shown inline in a code box). `format` selects which
+        snippet: `html` (default) emails the same HTML as `GET …/cookie-policy/html`; `script`
+        emails the `<script>` embed tag from `GET …/cookie-policy/script`. Uses the server's
+        nodemailer transport; mail-transport errors are swallowed (logged, not thrown), so a
+        mail outage still returns `200` once dispatch is attempted.
       security:
         - accessTokenCookie: []
       requestBody:
@@ -897,8 +1258,13 @@ paths:
                 email:
                   type: string
                   format: email
-                  example: "teammate@example.com"
+                  example: 'teammate@example.com'
                   description: Recipient address. Required; must be a valid email.
+                format:
+                  type: string
+                  enum: [html, script]
+                  default: html
+                  description: Which snippet to email — `html` (default) or the `<script>` embed tag (`script`).
       responses:
         '200':
           description: The email was dispatched.
@@ -908,7 +1274,7 @@ paths:
               example:
                 statuscode: 200
                 data: {}
-                message: "installation code sent sucessfully"
+                message: 'installation code sent sucessfully'
                 sucess: true
         '401':
           description: Not authenticated.
@@ -925,7 +1291,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "website not found", errors: [] }
+              example:
+                { success: false, message: 'website not found', errors: [] }
         '422':
           description: Validation failed (missing or invalid email).
           content:
@@ -963,7 +1330,12 @@ paths:
             schema:
               type: object
               properties:
-                heading: { type: string, maxLength: 255, example: "How do we use cookies?" }
+                heading:
+                  {
+                    type: string,
+                    maxLength: 255,
+                    example: 'How do we use cookies?',
+                  }
                 description: { type: string, maxLength: 20000 }
                 usedImageIds:
                   type: array
@@ -980,8 +1352,21 @@ paths:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
               example:
                 statuscode: 200
-                data: { content: { aboutCookies: { heading: "What are cookies?", description: "…" }, useOfCookies: { heading: "How do we use cookies?", description: "…" }, completedSections: [aboutCookies, useOfCookies] } }
-                message: "cookie policy updated sucessfully"
+                data:
+                  {
+                    content:
+                      {
+                        aboutCookies:
+                          { heading: 'What are cookies?', description: '…' },
+                        useOfCookies:
+                          {
+                            heading: 'How do we use cookies?',
+                            description: '…',
+                          },
+                        completedSections: [aboutCookies, useOfCookies],
+                      },
+                  }
+                message: 'cookie policy updated sucessfully'
                 sucess: true
         '401':
           description: Not authenticated.
@@ -998,7 +1383,12 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "unknown cookie policy section", errors: [] }
+              example:
+                {
+                  success: false,
+                  message: 'unknown cookie policy section',
+                  errors: [],
+                }
         '422':
           description: Validation failed (heading/description length).
           content:
@@ -1029,20 +1419,32 @@ paths:
               type: object
               required: [file]
               properties:
-                file: { type: string, format: binary, description: PNG or JPG image }
+                file:
+                  {
+                    type: string,
+                    format: binary,
+                    description: PNG or JPG image,
+                  }
       responses:
         '201':
           description: Image stored.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SuccessResponse' }
-              example: { statuscode: 201, data: { url: "/pulse/images/b1c2…" }, message: "image uploaded sucessfully", sucess: true }
+              example:
+                {
+                  statuscode: 201,
+                  data: { url: '/pulse/images/b1c2…' },
+                  message: 'image uploaded sucessfully',
+                  sucess: true,
+                }
         '400':
           description: No file provided.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "file is required", errors: [] }
+              example:
+                { success: false, message: 'file is required', errors: [] }
         '401':
           description: Not authenticated.
           content:
@@ -1058,13 +1460,19 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "website not found", errors: [] }
+              example:
+                { success: false, message: 'website not found', errors: [] }
         '415':
           description: Unsupported media type (only PNG/JPG allowed).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "Only PNG and JPG images are allowed", errors: [] }
+              example:
+                {
+                  success: false,
+                  message: 'Only PNG and JPG images are allowed',
+                  errors: [],
+                }
 
   /pulse/images/{id}:
     get:
@@ -1102,7 +1510,43 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-              example: { success: false, message: "image not found", errors: [] }
+              example:
+                { success: false, message: 'image not found', errors: [] }
+
+  /pulse/public/images/{id}:
+    get:
+      tags: [Images]
+      summary: Fetch an uploaded image (public)
+      description: >
+        Returns the raw image bytes by id — **PUBLIC: no authentication, no owner scoping**.
+        Anyone with the id can fetch it, so this backs the absolute
+        `${PUBLIC_BASE_URL}/pulse/public/images/{id}` references embedded in the exported /
+        emailed cookie policy (which must render on any host). The S3 bucket stays **private**:
+        the server reads the bytes with its own credentials and streams them directly (no
+        presigned URL / redirect). Cookie-policy images are public-by-intent (shown on a public
+        policy page); ids are unguessable UUIDs. A malformed/unknown id OR an unreadable S3
+        object returns `404`. Served with `Cache-Control: public, max-age=31536000, immutable`.
+        The authenticated `/pulse/images/{id}` route is unchanged and still used by the
+        editor/preview.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The image id (uuid).
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The image binary.
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+        '404':
+          description: Image not found (malformed/unknown id, or its S3 object is unreadable).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                { success: false, message: 'image not found', errors: [] }
 
 components:
   securitySchemes:
@@ -1127,7 +1571,7 @@ components:
     SetAuthCookies:
       description: Sets `accessToken` and `refreshToken` as httpOnly cookies.
       schema: { type: string }
-      example: "accessToken=...; HttpOnly; Path=/, refreshToken=...; HttpOnly; Path=/"
+      example: 'accessToken=...; HttpOnly; Path=/, refreshToken=...; HttpOnly; Path=/'
 
   schemas:
     SuccessResponse:
@@ -1155,7 +1599,7 @@ components:
       description: 422 from express-validator. `errors` lists each failed field.
       properties:
         success: { type: boolean, example: false }
-        message: { type: string, example: "Invalid credential" }
+        message: { type: string, example: 'Invalid credential' }
         errors:
           type: array
           items:
@@ -1163,21 +1607,27 @@ components:
             properties:
               type: { type: string, example: field }
               value: { type: string }
-              msg: { type: string, example: "Invalid email address" }
+              msg: { type: string, example: 'Invalid email address' }
               path: { type: string, example: email }
               location: { type: string, example: body }
       example:
         success: false
-        message: "Invalid credential"
+        message: 'Invalid credential'
         errors:
-          - { type: field, value: "", msg: "Email is required", path: email, location: body }
+          - {
+              type: field,
+              value: '',
+              msg: 'Email is required',
+              path: email,
+              location: body,
+            }
 
     RateLimitErrorResponse:
       type: object
       description: 429 from the login middleware; `errors.retryAfter` is seconds remaining.
       properties:
         success: { type: boolean, example: false }
-        message: { type: string, example: "Too many login attempts." }
+        message: { type: string, example: 'Too many login attempts.' }
         errors:
           type: object
           properties:

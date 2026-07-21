@@ -482,6 +482,36 @@ async function main() {
       `got ${htmlNotOwned.status}`,
     )
 
+    // Script embed tag ("Code snippet" add-to-site option) — the <script> tag whose
+    // src points at the Go script-generator's GET /scripts/<websiteId>.js.
+    const scriptRes = await apiAt(
+      'GET',
+      `/pulse/websites/${wid}/cookie-policy/script`,
+    )
+    const scriptBody = await scriptRes.json().catch(() => ({}))
+    const embedTag = scriptBody?.data?.script
+    check(
+      'cookie policy script embed → 200',
+      scriptRes.status === 200,
+      `got ${scriptRes.status}`,
+    )
+    check(
+      'script embed tag references /scripts/<websiteId>.js',
+      typeof embedTag === 'string' &&
+        embedTag.includes('<script') &&
+        embedTag.includes(`/scripts/${wid}.js`),
+      `got ${JSON.stringify(embedTag)}`,
+    )
+    const scriptNotOwned = await apiAt(
+      'GET',
+      '/pulse/websites/00000000-0000-0000-0000-000000000000/cookie-policy/script',
+    )
+    check(
+      'script embed of non-owned website → 404',
+      scriptNotOwned.status === 404,
+      `got ${scriptNotOwned.status}`,
+    )
+
     // Send code to a teammate — validation + ownership only (NO live send, so no real
     // email is dispatched from the smoke run).
     const sendBadEmail = await apiAt(
@@ -506,6 +536,17 @@ async function main() {
       'send-code of non-owned website → 404',
       sendNotOwned.status === 404,
       `got ${sendNotOwned.status}`,
+    )
+    // An invalid `format` is rejected (allowlisted html|script).
+    const sendBadFormat = await apiAt(
+      'POST',
+      `/pulse/websites/${wid}/cookie-policy/send-code`,
+      { email: 'teammate@example.com', format: 'pdf' },
+    )
+    check(
+      'send-code invalid format → 422',
+      sendBadFormat.status === 422,
+      `got ${sendBadFormat.status}`,
     )
 
     const cpBad = await apiAt(
