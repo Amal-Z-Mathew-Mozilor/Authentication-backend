@@ -1,8 +1,7 @@
 import { ApiError, ApiResponse } from '../utils/response/index.js'
 import {
-  emailVerification,
-  passwordResetVerification,
-  sendEmail,
+  buildVerificationEvent,
+  buildPasswordResetEvent,
   hashPassword,
   verifyPassword,
   hashToken,
@@ -14,6 +13,7 @@ import {
   resolveVerifyBase,
   clearAuthCookies,
 } from '../utils/auth/index.js'
+import { emitMailEvent } from '../utils/events/mailEmitter.js'
 import * as userRepository from '../repositories/user.repository.js'
 import * as emailVerificationRepository from '../repositories/emailVerification.repository.js'
 import * as passwordResetRepository from '../repositories/passwordReset.repository.js'
@@ -52,11 +52,7 @@ export const signup = asyncHandler(async (req, res) => {
     tokenExpiry,
     userId: user.id,
   })
-  await sendEmail({
-    email: email,
-    subject: 'please verify your email',
-    emailContent: emailVerification('there', `${base}/${unhashedToken}`),
-  })
+  emitMailEvent(buildVerificationEvent(email, `${base}/${unhashedToken}`))
   return res
     .status(201)
     .json(
@@ -140,14 +136,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
     token: hashedToken,
     tokenExpiry,
   })
-  await sendEmail({
-    email: user.email,
-    subject: 'To reset your password please verify your email',
-    emailContent: passwordResetVerification(
-      'there',
-      `${base}/${unhashedToken}`,
-    ),
-  })
+  emitMailEvent(buildPasswordResetEvent(user.email, `${base}/${unhashedToken}`))
   return res
     .status(200)
     .json(
@@ -447,11 +436,7 @@ export const resendVerification = asyncHandler(async (req, res) => {
     tokenExpiry,
     userId: id,
   })
-  await sendEmail({
-    email: user.email,
-    subject: 'please verify your email',
-    emailContent: emailVerification('there', `${base}/${unhashedToken}`),
-  })
+  emitMailEvent(buildVerificationEvent(user.email, `${base}/${unhashedToken}`))
   return res
     .status(200)
     .json(new ApiResponse(200, {}, 'A new verification email has been sent.'))
@@ -479,14 +464,7 @@ export const resetResend = asyncHandler(async (req, res) => {
     tokenExpiry,
     userId: id,
   })
-  await sendEmail({
-    email: user.email,
-    subject: 'To reset your password please verify your email',
-    emailContent: passwordResetVerification(
-      'there',
-      `${base}/${unhashedToken}`,
-    ),
-  })
+  emitMailEvent(buildPasswordResetEvent(user.email, `${base}/${unhashedToken}`))
   return res
     .status(200)
     .json(new ApiResponse(200, {}, 'A new password reset email has been sent.'))

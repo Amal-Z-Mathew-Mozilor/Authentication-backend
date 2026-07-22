@@ -13,10 +13,10 @@ import {
   todayISO,
 } from '../utils/cookiePolicy/index.js'
 import {
-  sendEmail,
-  policyInstallEmail,
-  policyScriptEmail,
+  buildPolicyInstallEvent,
+  buildPolicyScriptEvent,
 } from '../utils/auth/index.js'
+import { emitMailEvent } from '../utils/events/mailEmitter.js'
 import { postScript, buildEmbedTag } from '../utils/scriptGenerator/index.js'
 import 'dotenv/config'
 
@@ -114,21 +114,17 @@ export const getCookiePolicyHtml = asyncHandler(async (req, res) => {
 export const sendPolicyCode = asyncHandler(async (req, res) => {
   await assertOwnedWebsite(req.params.websiteId, req.user.id)
 
-  let subject, emailHtml, text
+  let event
   if (req.body.format === 'script') {
     const [site] = await websiteRepository.findUrlById(req.params.websiteId)
     const scriptTag = buildEmbedTag(req.params.websiteId)
-    ;({
-      subject,
-      html: emailHtml,
-      text,
-    } = policyScriptEmail(site?.url || '', scriptTag))
+    event = buildPolicyScriptEvent(req.body.email, site?.url || '', scriptTag)
   } else {
     const { html, url } = await buildPolicyHtml(req.params.websiteId)
-    ;({ subject, html: emailHtml, text } = policyInstallEmail(url, html))
+    event = buildPolicyInstallEvent(req.body.email, url, html)
   }
 
-  await sendEmail({ email: req.body.email, subject, html: emailHtml, text })
+  emitMailEvent(event)
   return res
     .status(200)
     .json(new ApiResponse(200, {}, 'installation code sent sucessfully'))

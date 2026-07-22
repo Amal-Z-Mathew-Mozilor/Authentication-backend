@@ -11,7 +11,16 @@ client lives in a separate repo (`../frontend`).
 - **Redis** (`redis` client) — refresh-token store, access-token blacklist, per-IP login counter,
   per-user `iat` cutoff (`session:iat:<userId>` — see Login protection / `AI_DOCS/session_iat_invalidation.md`).
 - **JWT** (`jsonwebtoken`) access + refresh tokens; **bcrypt** for password hashing.
-- **express-validator** for input validation; **nodemailer** + **mailgen** for emails.
+- **express-validator** for input validation.
+- **Email is now event-driven, not sent inline.** Instead of sending mail directly, controllers
+  **emit a mail event to Amazon SQS** (`@aws-sdk/client-sqs` → `MAIL_QUEUE_URL`); the separate Go
+  **`mailing` service** (`go/mailing/`) consumes it, renders the template, and sends via SMTP.
+  Controllers call `emitMailEvent(...)` (`src/utils/events/mailEmitter.js` — an in-process
+  `EventEmitter` fronting SQS, fire-and-forget) with a payload built by `src/utils/auth/mailEvents.js`
+  (`buildVerificationEvent`/`buildPasswordResetEvent`/`buildPolicyInstallEvent`/`buildPolicyScriptEvent`).
+  The publisher is `src/utils/aws/sqs.js` (`publishMailEvent`). The old **nodemailer + mailgen**
+  `sendEmail` + templates remain in `src/utils/auth/mail.js` but are no longer called. Event types →
+  `{ type, to, data }`; see `go/plans/mailing-service.md`.
 - **Amazon S3** (`@aws-sdk/client-s3`, `uuid`) — cookie-policy image storage (private bucket;
   the app reads objects' bytes and serves them itself — no presigned URLs). See Images.
 
