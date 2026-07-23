@@ -11,6 +11,11 @@ const SCRIPT_SERVICE_URL =
 const SCRIPT_SERVICE_PUBLIC_URL =
   process.env.SCRIPT_SERVICE_PUBLIC_URL || SCRIPT_SERVICE_URL
 
+// S3 object-key prefix the .js is stored under. MUST mirror the Go repository's
+// scriptKey() (go/script-generator/internal/repository/init.go): the embed URL is
+// SCRIPT_SERVICE_PUBLIC_URL (CloudFront origin) + this key, served directly from S3.
+const POLICY_SCRIPT_KEY_PREFIX = 'cookie-policy'
+
 /**
  * POST the policy config to the script-generator service, which renders the markup,
  * wraps it into an embeddable .js and stores/replaces it in S3 (keyed by config.id).
@@ -35,12 +40,14 @@ export async function postScript(config) {
 
 /**
  * Build the <script> embed tag the user pastes into their site <head>. The websiteId
- * is baked into the src, so at runtime the browser requests it back as GET /scripts/:id.js.
+ * is baked into the src as the S3 object key, so at runtime the browser fetches the
+ * stored .js directly from SCRIPT_SERVICE_PUBLIC_URL (a CloudFront origin in front of
+ * the S3 bucket), not through the Go GET /scripts/:id.js proxy.
  * @param {string} id - Site id (= websiteId).
  * @returns {string} The full embed snippet with Start/End markers.
  */
 export function buildEmbedTag(id) {
-  const src = `${SCRIPT_SERVICE_PUBLIC_URL}/scripts/${id}.js`
+  const src = `${SCRIPT_SERVICE_PUBLIC_URL}/${POLICY_SCRIPT_KEY_PREFIX}/${id}.js`
   return `<!-- Start Pulse cookie policy -->
 <script id="pulse-cookie-policy" type="text/javascript" src="${src}"></script>
 <!-- End Pulse cookie policy -->`
